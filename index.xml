@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>Film&amp;Art</title>
-    <link>http://ollybaysion.github.io/</link>
-    <description>Recent content on Film&amp;Art</description>
+    <title>HELLO</title>
+    <link>https://ollybaysion.github.io/</link>
+    <description>Recent content on HELLO</description>
+    <image>
+      <title>HELLO</title>
+      <url>https://ollybaysion.github.io/%3Clink%20or%20path%20of%20image%20for%20opengraph,%20twitter-cards%3E</url>
+      <link>https://ollybaysion.github.io/%3Clink%20or%20path%20of%20image%20for%20opengraph,%20twitter-cards%3E</link>
+    </image>
     <generator>Hugo -- gohugo.io</generator>
-    <language>en-us</language><atom:link href="http://ollybaysion.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <atom:link href="https://ollybaysion.github.io/index.xml" rel="self" type="application/rss+xml" />
   </channel>
 </rss>

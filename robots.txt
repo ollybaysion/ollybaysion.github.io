@@ -1,0 +1,3 @@
+User-agent: *
+Disallow:
+Sitemap: https://ollybaysion.github.io/sitemap.xml
