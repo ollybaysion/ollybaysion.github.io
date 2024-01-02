@@ -1,12 +1,10 @@
 <rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
     <channel>
-        <title>Film&amp;Art</title>
-        <link>http://ollybaysion.github.io/</link>
-        <description>This is my cool</description>
+        <title>데일리 - Tag - Film&amp;Art</title>
+        <link>http://ollybaysion.github.io/tags/%EB%8D%B0%EC%9D%BC%EB%A6%AC/</link>
+        <description>데일리 - Tag - Film&amp;Art</description>
         <generator>Hugo -- gohugo.io</generator><language>en</language><managingEditor>ollybaysion@gmail.com (ds.kim)</managingEditor>
-            <webMaster>ollybaysion@gmail.com (ds.kim)</webMaster><lastBuildDate>Tue, 02 Jan 2024 01:39:51 &#43;0900</lastBuildDate>
-            <atom:link href="http://ollybaysion.github.io/index.xml" rel="self" type="application/rss+xml" />
-        <item>
+            <webMaster>ollybaysion@gmail.com (ds.kim)</webMaster><lastBuildDate>Tue, 02 Jan 2024 01:39:51 &#43;0900</lastBuildDate><atom:link href="http://ollybaysion.github.io/tags/%EB%8D%B0%EC%9D%BC%EB%A6%AC/" rel="self" type="application/rss+xml" /><item>
     <title>Happy New Year</title>
     <link>http://ollybaysion.github.io/posts/first_post/</link>
     <pubDate>Tue, 02 Jan 2024 01:39:51 &#43;0900</pubDate>
