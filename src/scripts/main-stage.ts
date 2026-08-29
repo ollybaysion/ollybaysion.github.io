@@ -87,6 +87,8 @@ function start(svg: SVGSVGElement): void {
   const sitename = svg.querySelector<SVGGElement>("#sitename")!;
   const social = svg.querySelector<SVGGElement>("#social")!;
   const alumniCol = svg.querySelector<SVGGElement>("#alumni-col");
+  /** 좁아지면 물러나는 좌측 열 조각들 — 제사의 뜻풀이와 명함. */
+  const retreating = [...svg.querySelectorAll<SVGElement>("[data-min-w]")];
   const panel = svg.querySelector<SVGGElement>("#panel")!;
   const waveFill = svg.querySelector<SVGPathElement>("#p-wavefill")!;
   const waveLine = svg.querySelector<SVGPathElement>("#p-waveline")!;
@@ -182,11 +184,10 @@ function start(svg: SVGSVGElement): void {
     );
     if (alumniCol) {
       alumniCol.setAttribute("transform", `translate(${left + EDGE},196)`);
-      // 물러나는 기준은 실제 글자 길이에서 나온다(MainStage의 ALUMNI_MIN_W).
-      alumniCol.classList.toggle(
-        "is-hidden",
-        w < Number(alumniCol.dataset.minW),
-      );
+    }
+    // 물러나는 기준은 실제 글자 길이에서 나온다(MainStage의 needW).
+    for (const el of retreating) {
+      el.classList.toggle("is-hidden", w < Number(el.dataset.minW));
     }
   }
 

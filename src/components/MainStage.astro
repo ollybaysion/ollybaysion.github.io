@@ -52,23 +52,43 @@ const constellations = Object.entries(seriesData.series).flatMap(([name, members
 	];
 });
 
-/**
- * 이름 아래 제사(題詞)의 크기.
- *
- * 시안의 11은 "무엇을 쓰는 곳인지" 알려주는 부제 크기였다. 제사는 하는 일이 달라서
- * 그 크기로는 32짜리 이름 밑에서 그냥 묻힌다 — 낱말은 키우고 뜻풀이만 작게 남긴다.
- */
-const TAGLINE_Y = 31;
-const TAGLINE_SIZE = 18;
-const TAGLINE_SPACING = 2;
-const TAGLINE_GLOSS_SIZE = 10;
-const TAGLINE_GAP = 9;
-
 /** 정본 좌표계 폭. 필름 프레임선 자리가 이 단위로 적힌다. */
 const VIEW_W = 700;
 /** 필름 프레임 세로선 — 정본 폭의 118 · 606 자리(아래 <line data-at>와 같은 값). */
 const BAND_L = 118;
 const BAND_R = 606;
+
+/**
+ * 좌측 열의 글줄이 그 폭을 쓰려면 화면(정본 폭)이 얼마나 넓어야 하는가.
+ *
+ * 좌측 프레임선은 정본 폭의 118/700 자리에 있고 글은 EDGE에서 시작하니,
+ * 선 안에 들어올 조건은 `EDGE + 폭 + 여백 ≤ 정본폭 × 118/700`이다. 이걸 폭에 대해 푼 것.
+ */
+function needW(width: number, margin: number): number {
+	return Math.ceil((VIEW_W * (EDGE + width + margin)) / BAND_L);
+}
+
+/**
+ * 이름 아래 제사(題詞).
+ *
+ * 시안의 11은 "무엇을 쓰는 곳인지" 알려주는 부제 크기였다. 제사는 하는 일이 달라서
+ * 그 크기로는 32짜리 이름 밑에서 그냥 묻힌다. 낱말과 뜻풀이는 **같은 크기**로 선다 —
+ * 크기가 갈리면 뜻풀이가 부제로 읽힌다. 둘은 밝기로만 갈라진다.
+ *
+ * 15는 한 줄이 3:2 화면(정본 폭 1216)의 좌측 프레임선 안에 들어오는 최댓값이다.
+ * 그보다 좁아지면 뜻풀이가 물러나고 낱말만 남는다 — 명함이 물러나는 것과 같은 문법이다.
+ */
+const TAGLINE_Y = 31;
+const TAGLINE_SIZE = 15;
+const TAGLINE_SPACING = 2;
+const TAGLINE_GAP = 9;
+const TAGLINE_LEAD_W =
+	textWidth(PROFILE.tagline.lead, TAGLINE_SIZE) +
+	[...PROFILE.tagline.lead].length * TAGLINE_SPACING;
+const TAGLINE_GLOSS_MIN_W = needW(
+	TAGLINE_LEAD_W + TAGLINE_GAP + textWidth(PROFILE.tagline.gloss, TAGLINE_SIZE),
+	2,
+);
 
 /**
  * 좌측 명함의 이력 무리 — ALUMNI · CERTIFICATES.
@@ -155,10 +175,7 @@ const CARD_COL_W = Math.max(
  *
  * 조건: EDGE + 열너비 + 여백 ≤ 폭 × (BAND_L / 700)
  */
-const CARD_BAND_MARGIN = 2;
-const CARD_MIN_W = Math.ceil(
-	(VIEW_W * (EDGE + CARD_COL_W + CARD_BAND_MARGIN)) / BAND_L,
-);
+const CARD_MIN_W = needW(CARD_COL_W, 2);
 
 const PANEL_ROWS = [592, 624, 656, 688, 720];
 const REFLECTIONS = [
@@ -406,14 +423,15 @@ const REFLECTIONS = [
 				>{PROFILE.name}</text
 			>
 			{/*
-			  제사 — 낱말 하나를 크게 세우고 뜻풀이를 옆에 작게 붙인다.
+			  제사 — 한 줄, 한 크기. 낱말이 밝고 뜻풀이가 회색일 뿐 글자 크기는 같다.
 			  이름(32)이 회색이라, 여기만 밝은 글자가 되어 좌측 열에서 제일 먼저 읽힌다.
+			  좁은 화면에서는 뜻풀이가 물러난다(data-min-w).
 			*/}
 			<text x="0" y={TAGLINE_Y} font-size={TAGLINE_SIZE} fill="#e8e6e1">
 				<tspan letter-spacing={TAGLINE_SPACING}>{PROFILE.tagline.lead}</tspan>
-				<tspan dx={TAGLINE_GAP} font-size={TAGLINE_GLOSS_SIZE} fill="#8f8c85" opacity="0.75">
-					{PROFILE.tagline.gloss}
-				</tspan>
+				<tspan id="tagline-gloss" data-min-w={TAGLINE_GLOSS_MIN_W} dx={TAGLINE_GAP} fill="#8f8c85"
+					>{PROFILE.tagline.gloss}</tspan
+				>
 			</text>
 		</g>
 
@@ -585,9 +603,18 @@ const REFLECTIONS = [
 		pointer-events: none;
 	}
 
-	/* 좌측 열 — 명함. ALUMNI는 옆자리가 없는 좁은 무대에서 물러난다. */
+	/* 좌측 열 — 명함. 제사의 뜻풀이와 ALUMNI는 옆자리가 없는 좁은 무대에서 물러난다. */
 	#sitename {
 		opacity: 0.85;
+	}
+
+	#tagline-gloss {
+		opacity: 0.8;
+		transition: opacity 0.35s ease;
+	}
+
+	#tagline-gloss.is-hidden {
+		opacity: 0;
 	}
 
 	#alumni-col {
