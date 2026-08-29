@@ -1,5 +1,31 @@
 {
   "version": "coords-v1",
-  "epoch": null,
-  "entries": {}
+  "epoch": "2022-07-07T15:00:00.000Z",
+  "entries": {
+    "first-post": {
+      "angle": 107.34123317804188,
+      "radius": 140,
+      "placedAt": "2026-08-29T13:52:48.127Z"
+    },
+    "second-post": {
+      "angle": 108.0103999786079,
+      "radius": 140.21081883953812,
+      "placedAt": "2026-08-29T13:52:48.127Z"
+    },
+    "third-post": {
+      "angle": 108.5831248788163,
+      "radius": 140.42163767907624,
+      "placedAt": "2026-08-29T13:52:48.127Z"
+    },
+    "using-mdx": {
+      "angle": 107.79415732420358,
+      "radius": 160.90118209135028,
+      "placedAt": "2026-08-29T13:52:48.127Z"
+    },
+    "markdown-style-guide": {
+      "angle": 107.84625976491776,
+      "radius": 161.443287678734,
+      "placedAt": "2026-08-29T13:52:48.127Z"
+    }
+  }
 }

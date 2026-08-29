@@ -5,7 +5,7 @@
  * 변환식은 Main.dc.html 정본과 동일하다:
  *   x = CX + r·cos(a), y = CY + r·sin(a)  (SVG 좌표계라 y는 아래로 증가)
  */
-import { CENTER } from './constants.ts';
+import { CENTER, D_MAX } from './constants.ts';
 import type { Point } from './types.ts';
 
 export interface Placement {
@@ -26,4 +26,12 @@ export function screenDistance(a: Placement, b: Placement): number {
 	const pa = toPoint(a);
 	const pb = toPoint(b);
 	return Math.hypot(pa.x - pb.x, pa.y - pb.y);
+}
+
+/**
+ * 화면 거리 → 화면에 띄우는 근접도 [0, 1].
+ * 유사도를 직접 보여주지 않는다 — 독자가 보는 숫자는 언제나 거리에서 파생된다.
+ */
+export function proximity(a: Placement, b: Placement): number {
+	return Math.max(0, 1 - screenDistance(a, b) / D_MAX);
 }
