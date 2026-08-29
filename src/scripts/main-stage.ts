@@ -18,6 +18,9 @@ const EDGE = 52;
 const CX = 350;
 const CY = 235;
 
+/** ALUMNI 열은 무대가 이보다 좁으면 물러난다(시안). */
+const ALUMNI_MIN_W = 950;
+
 /** 이 선 아래는 원 구역이 아니다 — CLI·바다·패널의 영역. */
 const CLI_TOP = 470;
 const CLI_BOTTOM = 514;
@@ -32,10 +35,6 @@ const R2 = 4;
 const GOO_V = 0.66;
 const GOO_H = 2.4;
 
-/** 파도 목록 제목의 "N편" — 클릭 지점에서 이 거리 안에 든 글. */
-const NEAR_RADIUS = 160;
-/** 빛구멍 안 "N편 근방" — 커서 각도에서 이만큼 안에 든 글. */
-const NEAR_DEG = 35;
 
 interface Post {
   angle: number;
@@ -54,18 +53,12 @@ interface Row {
   distance: SVGTextElement;
 }
 
-function angularDistance(a: number, b: number): number {
-  const d = Math.abs(a - b);
-  return d > 180 ? 360 - d : d;
-}
-
 function clamp1(n: number): number {
   return Math.max(-1, Math.min(1, n));
 }
 
 function start(svg: SVGSVGElement): void {
   const dMax = Number(svg.dataset.dMax) || 390;
-  const counts: Record<string, number> = JSON.parse(svg.dataset.counts ?? "{}");
 
   const posts: Post[] = [...svg.querySelectorAll<SVGGElement>(".post")].map(
     (g) => {
@@ -93,9 +86,10 @@ function start(svg: SVGSVGElement): void {
     ...svg.querySelectorAll<SVGStopElement>("#hap-bloom stop"),
   ];
   const reflections = [...svg.querySelectorAll<SVGRectElement>(".refl")];
-  const cName = svg.querySelector<SVGTextElement>("#c-name")!;
-  const cCount = svg.querySelector<SVGTextElement>("#c-count")!;
-  const alumni = svg.querySelector<SVGTextElement>("#alumni")!;
+  const cliLine = svg.querySelector<SVGGElement>("#cli-line")!;
+  const sitename = svg.querySelector<SVGGElement>("#sitename")!;
+  const social = svg.querySelector<SVGGElement>("#social")!;
+  const alumniCol = svg.querySelector<SVGGElement>("#alumni-col");
   const panel = svg.querySelector<SVGGElement>("#panel")!;
   const waveFill = svg.querySelector<SVGPathElement>("#p-wavefill")!;
   const waveLine = svg.querySelector<SVGPathElement>("#p-waveline")!;
@@ -122,10 +116,6 @@ function start(svg: SVGSVGElement): void {
   const bleeds = [...svg.querySelectorAll<SVGLineElement>(".bleed")];
   const covers = [...svg.querySelectorAll<SVGRectElement>(".cover")];
   const bands = [...svg.querySelectorAll<SVGLineElement>(".band")];
-  const edgeLeft = [...svg.querySelectorAll<SVGElement>(".edge-l")];
-  const edgeRight = [...svg.querySelectorAll<SVGElement>(".edge-r")];
-  const edgeDots = [...svg.querySelectorAll<SVGCircleElement>(".edge-dot")];
-  const edgeTitles = [...svg.querySelectorAll<SVGTextElement>(".edge-title")];
   const sea = svg.querySelector<SVGGElement>("#sea")!;
   const seaClip = svg.querySelector<SVGRectElement>("#seaclip-rect")!;
   const seaFloor = svg.querySelector<SVGRectElement>("#sea-floor")!;
@@ -180,12 +170,23 @@ function start(svg: SVGSVGElement): void {
     seaFloor.setAttribute("width", String(w));
     seaFloor.setAttribute("height", String(Math.max(0, view.minY + h - 960)));
 
-    for (const node of edgeLeft) node.setAttribute("x", String(left + EDGE));
-    for (const node of edgeRight) node.setAttribute("x", String(right - EDGE));
-    for (const node of edgeDots)
-      node.setAttribute("cx", String(left + EDGE + 4));
-    for (const node of edgeTitles)
-      node.setAttribute("x", String(left + EDGE + 24));
+    // CLI ❯와 입력은 화면 왼쪽 끝에 붙는다. 파도 목록 행은 가운데 열에 그대로 남는다.
+    // 정본 x가 이미 52(EDGE)라 화면 왼쪽 끝만큼만 밀면 된다.
+    cliLine.setAttribute("transform", `translate(${left},0)`);
+
+    // 좌측 열 = 명함. 이름·아이콘은 화면 위에서부터, ALUMNI는 빛구멍 옆 하늘에 앉는다.
+    sitename.setAttribute(
+      "transform",
+      `translate(${left + EDGE},${view.minY + 70})`,
+    );
+    social.setAttribute(
+      "transform",
+      `translate(${left + EDGE},${view.minY + 116})`,
+    );
+    if (alumniCol) {
+      alumniCol.setAttribute("transform", `translate(${left + EDGE},196)`);
+      alumniCol.classList.toggle("is-hidden", w < ALUMNI_MIN_W);
+    }
   }
 
   const press = { x: 350, y: 115, op: 0 };
@@ -224,13 +225,12 @@ function start(svg: SVGSVGElement): void {
       })
       .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug));
 
-    const near = sorted.filter((entry) => entry.d < NEAR_RADIUS).length;
     let angle = (Math.atan2(y - CY, x - CX) * 180) / Math.PI;
     if (angle < 0) angle += 360;
     const category = nearestCategory(angle);
 
-    pName.textContent = `${category} 근방 · ${near}편`;
-    pMoreText.textContent = `목록 자세히 · ${counts[category] ?? 0}편 →`;
+    pName.textContent = category;
+    pMoreText.textContent = "목록 자세히 →";
     pMore.setAttribute(
       "href",
       `/list/${encodeURIComponent(category)}/?x=${x.toFixed(1)}&y=${y.toFixed(1)}`,
@@ -294,8 +294,12 @@ function start(svg: SVGSVGElement): void {
     if (panelState.open) {
       const panelTop = PANEL_TOP + panelState.y;
       if (point.y > panelTop) {
-        // 패널 안 — 우상단은 내리기, 나머지 행은 링크가 직접 받는다.
-        if (point.x > view.minX + view.w - 140 && point.y < panelTop + 62)
+        // 패널 안 — "내리기 ↓"는 가운데 열 오른쪽 끝에 있고, 나머지 행은 링크가 직접 받는다.
+        if (
+          point.x > VIEW_W - EDGE - 96 &&
+          point.x < VIEW_W - EDGE + 12 &&
+          point.y < panelTop + 62
+        )
           panelState.open = false;
         return;
       }
@@ -418,7 +422,6 @@ function start(svg: SVGSVGElement): void {
     beam.setAttribute("opacity", beamOpacity.toFixed(3));
     for (const stop of beamStops) stop.setAttribute("stop-color", color);
 
-    let near = 0;
     for (const post of posts) {
       const dx = press.x - post.x;
       const dy = press.y - post.y;
@@ -445,17 +448,11 @@ function start(svg: SVGSVGElement): void {
         "opacity",
         Math.max(0, (glow - 0.4) * 1.9).toFixed(2),
       );
-      if (angularDistance(post.angle, angle) < NEAR_DEG) near += 1;
     }
 
     for (const stop of haloStops) stop.setAttribute("stop-color", color);
     for (const stop of bloomStops) stop.setAttribute("stop-color", color);
     for (const bar of reflections) bar.setAttribute("fill", color);
-
-    if (press.op > 0.05) {
-      cName.textContent = nearestCategory(angle);
-      cCount.textContent = `${near}편 근방`;
-    }
 
     const now = performance.now() / 1000;
     const dt = lastT ? Math.min(0.05, now - lastT) : 0.016;
@@ -504,13 +501,6 @@ function start(svg: SVGSVGElement): void {
     panel.setAttribute("opacity", ps.op.toFixed(3));
     panel.classList.toggle("is-open", ps.op > 0.5);
 
-    // ALUMNI는 사라지지 않고 파도 능선이 지나가며 덮는다.
-    const crestY = WAVE_Y - A + py;
-    alumni.setAttribute(
-      "opacity",
-      Math.max(0, Math.min(1, (crestY - 544) / 26)).toFixed(3),
-    );
-
     // CLI: 캐럿은 줄에 마우스를 갖다 댔을 때만 (입력 중이면 유지).
     cliText.textContent = command;
     let width2 = 0;
@@ -519,7 +509,7 @@ function start(svg: SVGSVGElement): void {
     } catch {
       width2 = command.length * 8;
     }
-    cliCaret.setAttribute("x", (view.minX + EDGE + 24 + width2 + 2).toFixed(1));
+    cliCaret.setAttribute("x", (EDGE + 24 + width2 + 2).toFixed(1));
     const nearCli =
       target.over && target.y > CLI_TOP - 14 && target.y < CLI_BOTTOM + 14;
     cliCaret.setAttribute(

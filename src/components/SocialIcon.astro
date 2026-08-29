@@ -1,0 +1,59 @@
+---
+/**
+ * 무대 좌측 열의 아이콘 하나. 정본 = 시안의 `.soc` 그룹.
+ *
+ * URL이 아직 없으면 링크가 아니라 그림으로 남는다 — 눌러도 아무 데도 가지 않는
+ * 링크를 내보내지 않으려고. 주소가 채워지는 순간 링크가 된다.
+ */
+interface Props {
+	href: string;
+	label: string;
+	/** 아이콘 열에서의 가로 자리(시안: GitHub 0 · Instagram 27). */
+	x?: number;
+}
+
+const { href, label, x = 0 } = Astro.props;
+const transform = x === 0 ? undefined : `translate(${x},0)`;
+---
+
+{
+	href === '' ? (
+		<g class="soc is-inert" role="img" aria-label={label} transform={transform}>
+			<slot />
+		</g>
+	) : (
+		<a
+			class="soc"
+			href={href}
+			target="_blank"
+			rel="noopener noreferrer"
+			aria-label={label}
+			transform={transform}
+		>
+			<slot />
+		</a>
+	)
+}
+
+<style>
+	.soc {
+		cursor: pointer;
+		opacity: 0.65;
+		transition: opacity 0.18s ease;
+	}
+
+	.soc:hover,
+	.soc:focus-visible {
+		opacity: 1;
+	}
+
+	.soc.is-inert {
+		cursor: default;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.soc {
+			transition: none;
+		}
+	}
+</style>
