@@ -1,6 +1,10 @@
 {
   "name": "DS Kim",
-  "tagline": "기술과 커피를 기록합니다",
+  "tagline": {
+    "lead": "지양",
+    "gloss": "止揚 · Aufheben"
+  },
+  "description": "기술과 커피를 기록하는 블로그",
   "social": {
     "github": "https://github.com/ollybaysion",
     "instagram": "https://instagram.com/itsme._ysion"

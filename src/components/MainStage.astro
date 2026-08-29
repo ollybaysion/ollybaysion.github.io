@@ -52,6 +52,18 @@ const constellations = Object.entries(seriesData.series).flatMap(([name, members
 	];
 });
 
+/**
+ * 이름 아래 제사(題詞)의 크기.
+ *
+ * 시안의 11은 "무엇을 쓰는 곳인지" 알려주는 부제 크기였다. 제사는 하는 일이 달라서
+ * 그 크기로는 32짜리 이름 밑에서 그냥 묻힌다 — 낱말은 키우고 뜻풀이만 작게 남긴다.
+ */
+const TAGLINE_Y = 31;
+const TAGLINE_SIZE = 18;
+const TAGLINE_SPACING = 2;
+const TAGLINE_GLOSS_SIZE = 10;
+const TAGLINE_GAP = 9;
+
 /** 정본 좌표계 폭. 필름 프레임선 자리가 이 단위로 적힌다. */
 const VIEW_W = 700;
 /** 필름 프레임 세로선 — 정본 폭의 118 · 606 자리(아래 <line data-at>와 같은 값). */
@@ -393,7 +405,16 @@ const REFLECTIONS = [
 			<text class="mono" x="0" y="0" font-size="32" letter-spacing="1" fill="#8f8c85"
 				>{PROFILE.name}</text
 			>
-			<text x="0" y="28" font-size="11" fill="#8f8c85" opacity="0.75">{PROFILE.tagline}</text>
+			{/*
+			  제사 — 낱말 하나를 크게 세우고 뜻풀이를 옆에 작게 붙인다.
+			  이름(32)이 회색이라, 여기만 밝은 글자가 되어 좌측 열에서 제일 먼저 읽힌다.
+			*/}
+			<text x="0" y={TAGLINE_Y} font-size={TAGLINE_SIZE} fill="#e8e6e1">
+				<tspan letter-spacing={TAGLINE_SPACING}>{PROFILE.tagline.lead}</tspan>
+				<tspan dx={TAGLINE_GAP} font-size={TAGLINE_GLOSS_SIZE} fill="#8f8c85" opacity="0.75">
+					{PROFILE.tagline.gloss}
+				</tspan>
+			</text>
 		</g>
 
 		<g id="social">
