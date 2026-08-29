@@ -13,6 +13,22 @@
   --stage-serif: "Noto Serif KR", "Noto Serif", serif;
   --stage-sans: "Noto Sans KR", system-ui, sans-serif;
   --stage-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /*
+    코드 블록 — 정본엔 없다. "개발"이 카테고리로 있는 이상 필요해서
+    무대 팔레트 안에서 지었다(Shiki `css-variables` 테마가 이 이름들을 읽는다).
+  */
+  --astro-code-background: #17171b;
+  --astro-code-foreground: #d8d5cd;
+  --astro-code-token-comment: #6f6c65;
+  --astro-code-token-keyword: #c98a5a;
+  --astro-code-token-string: #b3a06d;
+  --astro-code-token-string-expression: #b3a06d;
+  --astro-code-token-constant: #cf9f61;
+  --astro-code-token-parameter: #d8d5cd;
+  --astro-code-token-function: #8fa7d6;
+  --astro-code-token-punctuation: #8f8c85;
+  --astro-code-token-link: #8fa7d6;
 }
 
 html {

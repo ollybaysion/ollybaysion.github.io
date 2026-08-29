@@ -28,7 +28,7 @@ export const YEAR_MS = 365.2425 * 24 * 60 * 60 * 1000;
  */
 export const D_MAX = 2 * RADIUS_MAX;
 
-/** 글 하나의 "근방"에 몇 편까지 실을지. */
+/** 글 하나에서 "가까운 글"을 몇 편까지 실을지. */
 export const NEIGHBOR_LIMIT = 8;
 
 /** 같은 시리즈 보너스. 유사도에 더한 뒤 1.0에서 자른다. */

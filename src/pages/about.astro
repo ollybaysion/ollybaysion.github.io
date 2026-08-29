@@ -1,14 +1,22 @@
 ---
-import AboutHeroImage from '../assets/blog-placeholder-about.jpg';
-import Layout from '../layouts/BlogPost.astro';
+/**
+ * 스캐폴드가 남긴 소개 페이지. 계획에 없는 화면이라 글 화면(BlogPost)에 얹혀 있었는데,
+ * 그 레이아웃이 원장의 좌표를 요구하게 되면서 떨어져 나왔다 — 자기 껍데기를 갖는다.
+ */
+import BaseHead from '../components/BaseHead.astro';
+import { SITE_TITLE } from '../consts';
+import '../styles/global.css';
 ---
 
-<Layout
-	title="About Me"
-	description="Lorem ipsum dolor sit amet"
-	date={new Date('August 08 2021')}
-	heroImage={AboutHeroImage}
->
+<!doctype html>
+<html lang="ko">
+	<head>
+		<BaseHead title={`소개 — ${SITE_TITLE}`} description="블로그 소개" />
+	</head>
+	<body>
+		<main>
+			<article class="prose">
+				<h1>About Me</h1>
 	<p>
 		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
 		labore et dolore magna aliqua. Vitae ultricies leo integer malesuada nunc vel risus commodo
@@ -60,4 +68,15 @@ import Layout from '../layouts/BlogPost.astro';
 		ac. Blandit libero volutpat sed cras. Nec tincidunt praesent semper feugiat nibh sed pulvinar
 		proin gravida. Egestas integer eget aliquet nibh praesent tristique magna.
 	</p>
-</Layout>
+			</article>
+		</main>
+	</body>
+</html>
+
+<style>
+	.prose {
+		width: 700px;
+		max-width: calc(100% - 2em);
+		margin: 3em auto;
+	}
+</style>

@@ -8,6 +8,8 @@ import { defineConfig, fontProviders } from 'astro/config';
 export default defineConfig({
 	site: 'https://ollybaysion.github.io',
 	integrations: [mdx(), sitemap()],
+	// 코드 블록 색을 무대 팔레트에 맞춘다 — 토큰 색은 stage.css의 --astro-code-* 가 정한다.
+	markdown: { shikiConfig: { theme: 'css-variables' } },
 	fonts: [
 		{
 			provider: fontProviders.local(),
