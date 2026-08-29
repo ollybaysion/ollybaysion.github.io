@@ -49,6 +49,22 @@ export function clampToArc(arc: Arc, angle: number, inset = 0): number {
 	return toAbsolute(arc, clampLocal(arc, toLocal(arc, angle), inset));
 }
 
+/**
+ * 각도 무리의 원형 평균 — 무리가 호 경계(0°)를 넘어가도 반대편으로 튀지 않는다.
+ * 정확히 마주 보는 두 각처럼 중심이랄 게 없는 무리는 첫 각을 준다.
+ */
+export function meanAngle(angles: readonly number[]): number {
+	let x = 0;
+	let y = 0;
+	for (const angle of angles) {
+		const a = (angle * Math.PI) / 180;
+		x += Math.cos(a);
+		y += Math.sin(a);
+	}
+	if (Math.hypot(x, y) < 1e-9) return norm360(angles[0] ?? 0);
+	return norm360((Math.atan2(y, x) * 180) / Math.PI);
+}
+
 /** 두 각도 사이의 최단 각거리(0..180). */
 export function angularDistance(a: number, b: number): number {
 	const d = Math.abs(norm360(a) - norm360(b));

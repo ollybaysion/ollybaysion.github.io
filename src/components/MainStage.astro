@@ -14,6 +14,7 @@ import SocialIcon from './SocialIcon.astro';
 import { PROFILE } from '../config/profile.ts';
 import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
+import { meanAngle } from '../lib/coords/arc.ts';
 import { labelPlacement } from '../lib/stage/label.ts';
 import { angleColor } from '../lib/stage/palette.ts';
 import { SEA_BANDS } from '../lib/stage/sea.ts';
@@ -34,14 +35,7 @@ const constellations = Object.entries(seriesData.series).flatMap(([name, members
 	if (nodes.length === 0) return [];
 
 	// 원형 평균 — 별자리가 호 경계를 넘어가도 색이 반대편으로 튀지 않는다.
-	const sum = members.reduce(
-		(acc, member) => {
-			const a = (member.angle * Math.PI) / 180;
-			return { x: acc.x + Math.cos(a), y: acc.y + Math.sin(a) };
-		},
-		{ x: 0, y: 0 },
-	);
-	const mean = (Math.atan2(sum.y, sum.x) * 180) / Math.PI;
+	const mean = meanAngle(members.map((member) => member.angle));
 	const last = nodes[nodes.length - 1]!;
 	return [
 		{
