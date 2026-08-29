@@ -1,0 +1,534 @@
+---
+/**
+ * 목록 화면 — 픽셀 정본 = `~/repo/blog-screens/ListA.dc.html`.
+ *
+ * 카테고리 한 종의 글을 세 단으로 편다: 최근 1편 자세히 → 주요 2편 → 전체.
+ * 주요 2편은 메인에서 클릭한 자리(`?x=&y=`) 기준 근접순이라 서버는 최신순으로 찍고
+ * 클라이언트가 자리를 받아 다시 채운다. 자리·크기는 `src/lib/stage/list.ts`가 정한다.
+ *
+ * 자바스크립트가 죽어도 최신순 한 장은 그대로 읽힌다.
+ */
+import postsData from '../data/generated/posts.json';
+import {
+	BACK_LINK,
+	BAND,
+	EDGE_L,
+	EDGE_R,
+	HOLE,
+	LIST_W,
+	ROW_METRICS,
+	SUBTITLE_Y,
+	circleTitle,
+	listLayout,
+	selectSections,
+	thumbScene,
+} from '../lib/stage/list.ts';
+import { angleColor, categoryDeepColor } from '../lib/stage/palette.ts';
+import { truncateText, wrapText } from '../lib/stage/text.ts';
+
+interface Props {
+	category: string;
+}
+
+const { category } = Astro.props;
+
+/** 화면이 쓰는 글 한 편의 모습. 클라이언트도 같은 모양을 JSON으로 받는다. */
+const posts = postsData.posts
+	.filter((post) => post.category === category)
+	.map((post) => ({
+		slug: post.slug,
+		title: post.title,
+		date: post.date.slice(0, 10),
+		description: post.description ?? '',
+		tags: post.tags,
+		minutes: post.readingMinutes,
+		x: post.x,
+		y: post.y,
+		color: angleColor(post.angle),
+	}));
+
+type Entry = (typeof posts)[number];
+
+const sections = selectSections(posts);
+const layout = listLayout({
+	latest: sections.latest ? 1 : 0,
+	featured: sections.featured.length,
+	rows: sections.rows.length,
+});
+
+const title = circleTitle(category);
+const deep = categoryDeepColor(category);
+
+/** 글자 크기별 줄바꿈 폭 — 정본이 남겨둔 자리 그대로다. */
+const LATEST_TEXT_W = EDGE_R - 356;
+const FEATURED_TEXT_W = 286;
+const ROW_TITLE_W = EDGE_R - ROW_METRICS.textX - 46;
+
+const meta = (post: Entry) => [post.date, ...post.tags].join(' · ');
+
+const latest = sections.latest;
+const latestTitle = latest ? wrapText(latest.title, 17, LATEST_TEXT_W, 2) : [];
+const latestDesc = latest ? wrapText(latest.description, 12, LATEST_TEXT_W, 3) : [];
+
+const featured = sections.featured.map((post, i) => ({
+	post,
+	card: layout.featured!.cards[i]!,
+	scene: thumbScene(layout.featured!.cards[i]!.thumb),
+	lines: wrapText(post.title, 14, FEATURED_TEXT_W, 2),
+}));
+
+const rows = sections.rows.map((post, i) => ({
+	post,
+	row: layout.rows!.rows[i]!,
+	title: truncateText(post.title, 15, ROW_TITLE_W),
+}));
+
+const latestScene = latest ? thumbScene(layout.latest!.thumb) : null;
+const n = (value: number) => Number(value.toFixed(3));
+---
+
+<div class="list">
+	<svg
+		id="listscene"
+		viewBox={`0 0 ${LIST_W} ${layout.height}`}
+		data-height={layout.height}
+		data-category={category}
+	>
+		<defs>
+			<radialGradient id="lap-light">
+				<stop offset="0%" stop-color="#fffdf4"></stop>
+				<stop offset="70%" stop-color="#fffdf4"></stop>
+				<stop offset="100%" stop-color="#eeddb8"></stop>
+			</radialGradient>
+			<radialGradient id="lap-bloom">
+				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.45"></stop>
+				<stop offset="45%" stop-color="#d9a154" stop-opacity="0.158"></stop>
+				<stop offset="100%" stop-color="#d9a154" stop-opacity="0"></stop>
+			</radialGradient>
+			<radialGradient id="clothfield">
+				<stop offset="0%" stop-color="#cfc9bd" stop-opacity="0"></stop>
+				<stop offset="36%" stop-color="#cfc9bd" stop-opacity="0"></stop>
+				<stop offset="46%" stop-color="#cfc9bd" stop-opacity="0.13"></stop>
+				<stop offset="62%" stop-color="#cfc9bd" stop-opacity="0.08"></stop>
+				<stop offset="100%" stop-color="#cfc9bd" stop-opacity="0"></stop>
+			</radialGradient>
+			<radialGradient id="avig" cx="0.5" cy="0.42" r="0.8">
+				<stop offset="0%" stop-color="#000000" stop-opacity="0"></stop>
+				<stop offset="68%" stop-color="#000000" stop-opacity="0"></stop>
+				<stop offset="100%" stop-color="#000000" stop-opacity="0.34"></stop>
+			</radialGradient>
+			<filter id="grainw">
+				<feTurbulence
+					type="fractalNoise"
+					baseFrequency="0.8"
+					numOctaves="2"
+					seed="7"
+					stitchTiles="stitch"></feTurbulence>
+				<feColorMatrix
+					type="matrix"
+					values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.6 0.6 0.6 0 0"></feColorMatrix>
+			</filter>
+			<filter id="punch" x="-15%" y="-15%" width="130%" height="130%">
+				<feTurbulence
+					type="fractalNoise"
+					baseFrequency="0.045"
+					numOctaves="3"
+					seed="4"
+					result="pn"></feTurbulence>
+				<feDisplacementMap in="SourceGraphic" in2="pn" scale="6"></feDisplacementMap>
+			</filter>
+			<filter id="soften" x="-20%" y="-20%" width="140%" height="140%">
+				<feGaussianBlur stdDeviation="3"></feGaussianBlur>
+			</filter>
+			{
+				featured.map((_, i) => (
+					<clipPath id={`th-f${i}`}>
+						<rect
+							x={layout.featured!.cards[i]!.thumb.x}
+							y={layout.featured!.cards[i]!.thumb.y}
+							width={layout.featured!.cards[i]!.thumb.w}
+							height={layout.featured!.cards[i]!.thumb.h}
+							rx="4"></rect>
+					</clipPath>
+				))
+			}
+			{
+				latest && (
+					<clipPath id="th-latest">
+						<rect
+							x={layout.latest!.thumb.x}
+							y={layout.latest!.thumb.y}
+							width={layout.latest!.thumb.w}
+							height={layout.latest!.thumb.h}
+							rx="4"
+						/>
+					</clipPath>
+				)
+			}
+		</defs>
+
+		{/* 화면 위쪽에 반쯤 박힌 빛구멍 — 모든 화면에 나오는 그 원이다. */}
+		<circle cx={HOLE.cx} cy={HOLE.cy} r="150" fill="url(#clothfield)"></circle>
+		<circle cx={HOLE.cx} cy={HOLE.cy} r="200" fill="url(#lap-bloom)"></circle>
+		<circle cx={HOLE.cx} cy={HOLE.cy} r={HOLE.r} fill="url(#lap-light)" filter="url(#punch)"
+		></circle>
+		<circle cx={HOLE.cx} cy={HOLE.cy} r="48" fill="#ffffff" opacity="0.55" filter="url(#soften)"
+		></circle>
+
+		<a href="/" class="back">
+			<text x={BACK_LINK.x} y={BACK_LINK.y} font-size="11.5" fill="#8f8c85" opacity="0.85"
+				>← 메인</text
+			>
+		</a>
+
+		<text class="cat" x={HOLE.cx} text-anchor="middle" font-size={title.size} fill={deep}>
+			{title.lines.map((line, i) => <tspan x={HOLE.cx} y={n(title.baselines[i]!)}>{line}</tspan>)}
+		</text>
+
+		<text
+			id="l-subtitle"
+			class="mono"
+			x={HOLE.cx}
+			y={SUBTITLE_Y}
+			text-anchor="middle"
+			font-size="11"
+			fill="#8f8c85">{`최신순 · ${posts.length}편`}</text
+		>
+
+		{
+			latest && latestScene && (
+				<>
+					<text
+						class="section"
+						x={EDGE_L}
+						y={layout.latest!.label}
+						font-size="10.5"
+						letter-spacing="3"
+						fill="#8f8c85"
+					>
+						최근
+					</text>
+					<a id="l-latest" href={`/blog/${latest.slug}/`}>
+						<rect
+							class="hit"
+							x={layout.latest!.thumb.x}
+							y={layout.latest!.thumb.y}
+							width={EDGE_R - layout.latest!.thumb.x}
+							height={layout.latest!.thumb.h}
+						/>
+						<g clip-path="url(#th-latest)">
+							<rect
+								x={layout.latest!.thumb.x}
+								y={layout.latest!.thumb.y}
+								width={layout.latest!.thumb.w}
+								height={layout.latest!.thumb.h}
+								fill="#17171b"
+							/>
+							<circle
+								cx={n(latestScene.hole.cx)}
+								cy={n(latestScene.hole.cy)}
+								r={n(latestScene.hole.r)}
+								fill="#f5e9c8"
+								opacity="0.9"
+							/>
+							{latestScene.waves.map((wave, i) => (
+								<path
+									class="thumb-wave"
+									data-wave={i}
+									d={wave.d}
+									fill={latest.color}
+									opacity={wave.opacity}
+								/>
+							))}
+						</g>
+						<rect
+							x={layout.latest!.thumb.x}
+							y={layout.latest!.thumb.y}
+							width={layout.latest!.thumb.w}
+							height={layout.latest!.thumb.h}
+							rx="4"
+							fill="none"
+							stroke="#26262b"
+							stroke-width="1"
+						/>
+						<text
+							class="serif"
+							x={layout.latest!.textX}
+							font-size="17"
+							font-weight="600"
+							fill="#e8e6e1"
+						>
+							{latestTitle.map((line, i) => (
+								<tspan x={layout.latest!.textX} y={layout.latest!.title[i]!}>
+									{line}
+								</tspan>
+							))}
+						</text>
+						<text
+							class="mono"
+							x={layout.latest!.textX}
+							y={layout.latest!.meta}
+							font-size="10.5"
+							fill="#8f8c85"
+						>
+							{meta(latest)}
+						</text>
+						<text x={layout.latest!.textX} font-size="12" fill="#8f8c85">
+							{latestDesc.map((line, i) => (
+								<tspan x={layout.latest!.textX} y={layout.latest!.desc[i]!}>
+									{line}
+								</tspan>
+							))}
+						</text>
+					</a>
+				</>
+			)
+		}
+
+		{
+			featured.length > 0 && (
+				<text
+					class="section"
+					x={EDGE_L}
+					y={layout.featured!.label}
+					font-size="10.5"
+					letter-spacing="3"
+					fill="#8f8c85"
+				>
+					주요
+				</text>
+			)
+		}
+		{
+			featured.map(({ post, card, scene, lines }, i) => (
+				<a class="lcard" data-slot={i} href={`/blog/${post.slug}/`}>
+					<rect
+						class="hit"
+						x={card.thumb.x}
+						y={card.thumb.y}
+						width={card.thumb.w}
+						height={card.date + 8 - card.thumb.y}
+					/>
+					<g clip-path={`url(#th-f${i})`}>
+						<rect x={card.thumb.x} y={card.thumb.y} width={card.thumb.w} height={card.thumb.h} fill="#17171b" />
+						<circle cx={n(scene.hole.cx)} cy={n(scene.hole.cy)} r={n(scene.hole.r)} fill="#f5e9c8" opacity="0.9" />
+						{scene.waves.map((wave, w) => (
+							<path class="thumb-wave" data-wave={w} d={wave.d} fill={post.color} opacity={wave.opacity} />
+						))}
+					</g>
+					<rect
+						x={card.thumb.x}
+						y={card.thumb.y}
+						width={card.thumb.w}
+						height={card.thumb.h}
+						rx="4"
+						fill="none"
+						stroke="#26262b"
+						stroke-width="1"
+					/>
+					<text
+						class="serif"
+						x={card.thumb.x}
+						data-lines={card.title.join(' ')}
+						font-size="14"
+						font-weight="600"
+						fill="#e8e6e1"
+					>
+						{lines.map((line, l) => (
+							<tspan x={card.thumb.x} y={card.title[l]!}>
+								{line}
+							</tspan>
+						))}
+					</text>
+					<text class="mono" x={card.thumb.x} y={card.date} font-size="10" fill="#8f8c85">
+						{post.date}
+					</text>
+				</a>
+			))
+		}
+
+		{
+			rows.length > 0 && (
+				<>
+					<text
+						class="section"
+						x={EDGE_L}
+						y={layout.rows!.label}
+						font-size="10.5"
+						letter-spacing="3"
+						fill="#8f8c85"
+					>
+						전체
+					</text>
+					{/* 검색은 미확정이라 글자만 있고 눌리지 않는다. 정렬 둘만 산다. */}
+					<text x={EDGE_R} y={layout.rows!.label} text-anchor="end" font-size="12" fill="#8f8c85">
+						<tspan class="inert">검색 ·</tspan>
+						<tspan id="sort-newest" class="sort is-on"> 최신순 ⌄</tspan>
+						<tspan class="inert"> ·</tspan>
+						<tspan id="sort-near" class="sort"> 좌표 근방순</tspan>
+					</text>
+				</>
+			)
+		}
+		{
+			rows.map(({ post, row, title: rowTitle }, i) => (
+				<g class="lrow" data-slot={i}>
+					<a href={`/blog/${post.slug}/`}>
+						<rect class="hit" x={EDGE_L} y={row.dot - 20} width={EDGE_R - EDGE_L} height={54} />
+						<circle cx={ROW_METRICS.dotX} cy={row.dot} r="6" fill={post.color} opacity="0.16" />
+						<circle cx={ROW_METRICS.dotX} cy={row.dot} r="3" fill={post.color} />
+						<text x={ROW_METRICS.textX} y={row.title} font-size="15" fill="#e8e6e1">
+							{rowTitle}
+						</text>
+						<text x={ROW_METRICS.textX} y={row.meta} font-size="11.5" fill="#8f8c85">
+							{meta(post)}
+						</text>
+						<text
+							class="mono"
+							x={EDGE_R}
+							y={row.title}
+							text-anchor="end"
+							font-size="11"
+							fill="#8f8c85"
+						>
+							{`${post.minutes}분`}
+						</text>
+					</a>
+					<line
+						x1={EDGE_L}
+						y1={row.rule}
+						x2={EDGE_R}
+						y2={row.rule}
+						stroke="#222226"
+						stroke-width="1"
+					/>
+				</g>
+			))
+		}
+
+		<rect class="bleed-cover" x="0" y="0" width={LIST_W} height={layout.height} fill="url(#avig)"
+		></rect>
+		<rect
+			class="bleed-cover"
+			x="0"
+			y="0"
+			width={LIST_W}
+			height={layout.height}
+			filter="url(#grainw)"
+			opacity="0.05"></rect>
+		<line
+			class="bleed-band"
+			data-at={BAND[0]}
+			x1={BAND[0]}
+			y1="0"
+			x2={BAND[0]}
+			y2={layout.height}
+			stroke="#ffffff"
+			stroke-width="0.6"
+			opacity="0.04"></line>
+		<line
+			class="bleed-band"
+			data-at={BAND[1]}
+			x1={BAND[1]}
+			y1="0"
+			x2={BAND[1]}
+			y2={layout.height}
+			stroke="#ffffff"
+			stroke-width="0.9"
+			opacity="0.056"></line>
+	</svg>
+
+	<script type="application/json" id="list-data" set:html={JSON.stringify(posts)} is:inline
+	></script>
+</div>
+
+<style>
+	/*
+	  목록은 읽는 화면이라 세로로 흐른다. 정본의 700 좌표계는 그대로 두고
+	  메인과 같은 배율(min(폭/700, 높이/790))로 키운 뒤, 남는 가로는 무대가 넓어진다.
+	  실제 viewBox와 가로 요소의 폭은 list-screen.ts의 layout()이 잡는다.
+	*/
+	.list {
+		width: 100%;
+	}
+
+	#listscene {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+
+	#listscene text {
+		font-family: var(--stage-sans);
+	}
+
+	#listscene .serif,
+	#listscene .cat {
+		font-family: var(--stage-serif);
+	}
+
+	#listscene .mono {
+		font-family: var(--stage-mono);
+	}
+
+	#listscene a {
+		cursor: pointer;
+	}
+
+	#listscene a text,
+	#listscene a rect,
+	#listscene a circle,
+	#listscene a path {
+		transition:
+			opacity 0.18s ease,
+			fill 0.18s ease;
+	}
+
+	#listscene a:hover text,
+	#listscene a:focus-visible text {
+		fill: #ffffff;
+	}
+
+	#listscene a:hover .mono,
+	#listscene a:focus-visible .mono {
+		fill: #b6b2aa;
+	}
+
+	/* 글자 위에서만 눌리면 답답하다 — 행·카드 전체가 링크가 되게 투명한 판을 깐다. */
+	.hit {
+		fill: #ffffff;
+		fill-opacity: 0;
+		pointer-events: all;
+	}
+
+	/* 비네트·그레인·프레임선은 장식이다 — 클릭은 그 아래 링크가 받는다. */
+	.bleed-cover,
+	.bleed-band {
+		pointer-events: none;
+	}
+
+	.sort {
+		cursor: pointer;
+	}
+
+	.sort.is-on {
+		fill: #e8e6e1;
+	}
+
+	.inert {
+		opacity: 0.55;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		#listscene a text,
+		#listscene a rect,
+		#listscene a circle,
+		#listscene a path {
+			transition: none;
+		}
+	}
+</style>
+
+<script>
+	import '../scripts/list-screen.ts';
+</script>

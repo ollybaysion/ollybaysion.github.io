@@ -8,6 +8,7 @@ import { slug as githubSlug } from 'github-slugger';
 import { load as loadYaml } from 'js-yaml';
 import { CATEGORY_NAMES, isCategory } from '../../src/config/categories.ts';
 import { COORDS_VERSION } from '../../src/lib/coords/constants.ts';
+import { readingMinutes } from '../../src/lib/stage/reading.ts';
 
 export const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 export const CONTENT_DIR = path.join(PROJECT_ROOT, 'src/content/blog');
@@ -64,7 +65,7 @@ function parseFrontmatter(raw, filePath) {
 	if (data === null || typeof data !== 'object') {
 		throw new Error(`frontmatter를 읽을 수 없다: ${path.relative(PROJECT_ROOT, filePath)}`);
 	}
-	return data;
+	return { data, body: raw.slice(match[0].length) };
 }
 
 function toIsoDate(value, filePath) {
@@ -85,7 +86,7 @@ export async function readPosts() {
 	const parsed = await Promise.all(
 		files.map(async (filePath) => {
 			const raw = await readFile(filePath, 'utf8');
-			const data = parseFrontmatter(raw, filePath);
+			const { data, body } = parseFrontmatter(raw, filePath);
 			const where = path.relative(PROJECT_ROOT, filePath);
 
 			if (typeof data.title !== 'string' || data.title.trim() === '') {
@@ -115,6 +116,7 @@ export async function readPosts() {
 				series: typeof data.series === 'string' ? data.series : undefined,
 				episode: typeof data.episode === 'number' ? data.episode : undefined,
 				description: typeof data.description === 'string' ? data.description : undefined,
+				readingMinutes: readingMinutes(body),
 			};
 		}),
 	);

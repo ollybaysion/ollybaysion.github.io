@@ -120,3 +120,8 @@ export function nearestCategory(angle: number): string {
 export function categoryColor(name: string): string {
   return toRgbString(parseHex(colorOf(name).base));
 }
+
+/** 목록·글 화면에서 원 안 이름을 앉히는 진한 색. */
+export function categoryDeepColor(name: string): string {
+  return toRgbString(parseHex(colorOf(name).deep));
+}
