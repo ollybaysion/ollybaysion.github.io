@@ -53,10 +53,21 @@ const constellations = Object.entries(seriesData.series).flatMap(([name, members
 	];
 });
 
-/** ALUMNI 줄 간격(시안: 32 · 58 · 84). */
-const ALUMNI_STRIDE = 26;
-/** 연도 열 다음, 약력이 시작하는 자리. */
-const ALUMNI_WHAT_X = 76;
+/**
+ * ALUMNI 글자 크기 — 시안(11.5/10.5)보다 한 단계 작다.
+ *
+ * 명함은 읽는 것이지 보는 것이 아니다. 시안의 크기는 짧은 자리표시자 기준이라
+ * 진짜 약력이 들어가자 열이 너무 길어져 왼쪽 프레임선을 넘어 장면 쪽으로 뻗었다.
+ * 글자를 줄이면 열이 47단위 좁아지고, 그만큼 무대와의 사이가 벌어진다.
+ */
+const ALUMNI_SIZE = 10;
+const ALUMNI_YEAR_SIZE = 9;
+const ALUMNI_LABEL_SIZE = 10;
+const ALUMNI_LABEL_SPACING = 2.6;
+/** ALUMNI 줄 간격(시안: 32 · 58 · 84 = 26칸). 글자가 작아진 만큼 좁힌다. */
+const ALUMNI_STRIDE = 23;
+/** 연도 열 다음, 약력이 시작하는 자리. 가장 긴 연도("2018–2024" = 42.3)를 담는다. */
+const ALUMNI_WHAT_X = 58;
 
 /**
  * ALUMNI를 접는 기준 폭 — 시안의 950단위를 **실제 글자 길이에서 다시 계산한다.**
@@ -68,13 +79,13 @@ const ALUMNI_WHAT_X = 76;
  * 조건: 가장 긴 줄의 오른쪽 끝 + 여백 ≤ 장면 왼쪽 끝.
  *   (350 − w/2) + EDGE + 열너비 + GAP ≤ STAGE_LEFT
  */
-const ALUMNI_GAP = 16;
+const ALUMNI_GAP = 56;
 /** 장면이 시작하는 자리 — 가장 바깥 나이테의 글 점이 여기까지 온다(350 − RADIUS_MAX). */
 const STAGE_LEFT = CENTER.x - RADIUS_MAX;
 const ALUMNI_COL_W = Math.max(
-	// ALUMNI 라벨은 letter-spacing 3이라 글자 수만큼 더 벌어진다.
-	textWidth('ALUMNI', 11) + 'ALUMNI'.length * 3,
-	...PROFILE.alumni.map((entry) => ALUMNI_WHAT_X + textWidth(entry.what, 11.5)),
+	// ALUMNI 라벨은 letter-spacing이 붙어 글자 수만큼 더 벌어진다.
+	textWidth('ALUMNI', ALUMNI_LABEL_SIZE) + 'ALUMNI'.length * ALUMNI_LABEL_SPACING,
+	...PROFILE.alumni.map((entry) => ALUMNI_WHAT_X + textWidth(entry.what, ALUMNI_SIZE)),
 );
 const ALUMNI_MIN_W = Math.ceil(
 	2 * (CENTER.x + EDGE + ALUMNI_COL_W + ALUMNI_GAP - STAGE_LEFT),
@@ -366,12 +377,19 @@ const REFLECTIONS = [
 						width={ALUMNI_COL_W + 16}
 						height={PROFILE.alumni.length * ALUMNI_STRIDE + 32}
 					/>
-					<text x="0" y="0" font-size="11" letter-spacing="3" fill="#8f8c85" opacity="0.8">
+					<text
+						x="0"
+						y="0"
+						font-size={ALUMNI_LABEL_SIZE}
+						letter-spacing={ALUMNI_LABEL_SPACING}
+						fill="#8f8c85"
+						opacity="0.8"
+					>
 						ALUMNI
 					</text>
 					{PROFILE.alumni.map((entry, i) => (
-						<text class="al-line" x="0" y={32 + i * ALUMNI_STRIDE} font-size="11.5">
-							<tspan class="mono" font-size="10.5" opacity="0.7">
+						<text class="al-line" x="0" y={30 + i * ALUMNI_STRIDE} font-size={ALUMNI_SIZE}>
+							<tspan class="mono" font-size={ALUMNI_YEAR_SIZE} opacity="0.7">
 								{entry.years}
 							</tspan>
 							<tspan x={ALUMNI_WHAT_X}>{entry.what}</tspan>
