@@ -22,6 +22,15 @@ export const BAND_YEARS = 5;
 /** 1년(ms). 그레고리력 평균 연장 365.2425일 고정 — 결정론 유지용. */
 export const YEAR_MS = 365.2425 * 24 * 60 * 60 * 1000;
 
+/**
+ * 화면 거리를 %로 바꿀 때 쓰는 분모. 두 글이 벌어질 수 있는 최대 거리
+ * (안쪽 테두리를 사이에 두고 정반대) = 지름.
+ */
+export const D_MAX = 2 * RADIUS_MAX;
+
+/** 글 하나의 "근방"에 몇 편까지 실을지. */
+export const NEIGHBOR_LIMIT = 8;
+
 /** 같은 시리즈 보너스. 유사도에 더한 뒤 1.0에서 자른다. */
 export const SERIES_BONUS = 0.3;
 

@@ -8,16 +8,28 @@ export {
 	BAND_YEARS,
 	CENTER,
 	COORDS_VERSION,
+	D_MAX,
 	JITTER_DEG,
 	LIGHT_HOLE_RADIUS,
+	NEIGHBOR_LIMIT,
 	RADIUS_MAX,
 	RADIUS_MIN,
 	SERIES_BONUS,
 	YEAR_MS,
 } from './constants.ts';
+export {
+	byDateThenSlug,
+	constellations,
+	groupByCategory,
+	neighborMap,
+	neighborsOf,
+	orderSeries,
+} from './derive.ts';
+export type { ConstellationMember, Neighbor, PlacedEntry } from './derive.ts';
 export { hash01, normalizeTag, normalizeTags } from './hash.ts';
-export { screenDistance, toPoint } from './position.ts';
+export { proximity, screenDistance, toPoint } from './position.ts';
 export type { Placement } from './position.ts';
+export { confusableTags, editDistance } from './tags.ts';
 export { placeRadius } from './radius.ts';
 export { similarity, tagJaccard } from './similarity.ts';
 export type { Arc, Ledger, LedgerEntry, PlacedPost, Point, PostInput } from './types.ts';

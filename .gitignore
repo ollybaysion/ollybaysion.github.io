@@ -2,6 +2,8 @@
 dist/
 # generated types
 .astro/
+# 원장에서 파생되는 데이터 — 매 빌드마다 다시 만든다 (원장 자체는 커밋한다)
+src/data/generated/
 
 # dependencies
 node_modules/

@@ -20,6 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: withastro/action@v4
+        with:
+          # 빌드 파이프라인(prebuild)이 .ts 좌표 엔진을 그대로 import 한다 —
+          # 타입 스트리핑이 기본으로 켜진 Node가 필요하다.
+          node-version: 24
 
   deploy:
     needs: build
