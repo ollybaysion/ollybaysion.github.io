@@ -8,18 +8,15 @@
   "alumni": [
     {
       "years": "2018–2024",
-      "what": "SKKU Semiconductor System Engineering",
-      "category": "개발"
+      "what": "SKKU Semiconductor System Engineering"
     },
     {
       "years": "2024–",
-      "what": "Samsung Electronics AX/PI Center",
-      "category": "개발"
+      "what": "Samsung Electronics AX/PI Center"
     },
     {
       "years": "2026",
-      "what": "SCA Brewing Professional",
-      "category": "커피"
+      "what": "SCA Brewing Professional"
     }
   ]
 }
