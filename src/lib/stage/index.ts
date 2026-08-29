@@ -4,4 +4,5 @@ export * from "./list.ts";
 export * from "./palette.ts";
 export * from "./post.ts";
 export * from "./reading.ts";
+export * from "./series.ts";
 export * from "./text.ts";

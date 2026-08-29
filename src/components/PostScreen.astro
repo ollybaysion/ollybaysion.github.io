@@ -12,6 +12,7 @@ import categoriesData from '../data/generated/categories.json';
 import neighborsData from '../data/generated/neighbors.json';
 import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
+import { meanAngle } from '../lib/coords/arc.ts';
 import { BAND, EDGE_L, EDGE_R, HOLE } from '../lib/stage/list.ts';
 import { angleColor, categoryDeepColor } from '../lib/stage/palette.ts';
 import {
@@ -81,18 +82,10 @@ const strip =
 				});
 				const points = stripPoints(nodes);
 				const here = nodes.findIndex((node) => node.slug === slug);
-				// 원형 평균 — 별자리가 호 경계를 넘어가도 색이 반대편으로 튀지 않는다.
-				const sum = nodes.reduce(
-					(acc, node) => {
-						const entry = bySlug.get(node.slug)!;
-						const a = (entry.angle * Math.PI) / 180;
-						return { x: acc.x + Math.cos(a), y: acc.y + Math.sin(a) };
-					},
-					{ x: 0, y: 0 },
-				);
 				return {
 					name: post.series,
-					color: angleColor((Math.atan2(sum.y, sum.x) * 180) / Math.PI),
+					// 원형 평균 — 별자리가 호 경계를 넘어가도 색이 반대편으로 튀지 않는다.
+					color: angleColor(meanAngle(nodes.map((node) => node.angle))),
 					points,
 					here,
 					total: nodes.length,
