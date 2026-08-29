@@ -75,12 +75,13 @@ const ALUMNI_LABEL_SPACING = 2.6;
  * 모노는 en dash까지 전부 0.6 정폭이다). 가장 긴 연도를 정폭으로 재고 8을 띄운다.
  */
 const ALUMNI_MONO_RATIO = 0.6;
-const ALUMNI_WHAT_X =
-	Math.ceil(
-		Math.max(...PROFILE.alumni.map((entry) => [...entry.years].length)) *
-			ALUMNI_MONO_RATIO *
-			ALUMNI_YEAR_SIZE,
-	) + 8;
+/** 연도 열이 끝나는 자리. 연도는 여기에 **오른쪽 맞춤**한다. */
+const ALUMNI_YEAR_R = Math.ceil(
+	Math.max(...PROFILE.alumni.map((entry) => [...entry.years].length)) *
+		ALUMNI_MONO_RATIO *
+		ALUMNI_YEAR_SIZE,
+);
+const ALUMNI_WHAT_X = ALUMNI_YEAR_R + 10;
 /**
  * 약력 한 줄이 쓸 수 있는 폭. 넘으면 연도 옆에서 두 줄로 접는다.
  *
@@ -90,9 +91,14 @@ const ALUMNI_WHAT_X =
  * 5.4px까지 줄여야 들어간다. 그래서 크기가 아니라 줄로 푼다.
  */
 const ALUMNI_WRAP_W = 100;
-/** 한 약력 안에서의 줄 간격 · 약력끼리의 간격. */
-const ALUMNI_LINE_H = 13;
-const ALUMNI_ENTRY_GAP = 10;
+/**
+ * 한 약력 안에서의 줄 간격 · 약력끼리의 간격.
+ *
+ * 두 값의 대비가 곧 묶음이다. 13 대 23이면 여섯 줄이 한 덩어리로 뭉개져 보인다 —
+ * 12 대 32로 벌려야 "두 줄짜리 항목 셋"으로 읽힌다.
+ */
+const ALUMNI_LINE_H = 12;
+const ALUMNI_ENTRY_GAP = 20;
 /** ALUMNI 라벨(y=0) 아래 첫 줄이 앉는 자리. */
 const ALUMNI_TOP = 30;
 
@@ -435,7 +441,13 @@ const REFLECTIONS = [
 					</text>
 					{ALUMNI_ROWS.map((row) => (
 						<text class="al-line" x="0" y={row.y} font-size={ALUMNI_SIZE}>
-							<tspan class="mono" font-size={ALUMNI_YEAR_SIZE} opacity="0.7">
+							<tspan
+								class="mono"
+								x={ALUMNI_YEAR_R}
+								text-anchor="end"
+								font-size={ALUMNI_YEAR_SIZE}
+								opacity="0.7"
+							>
 								{row.years}
 							</tspan>
 							{row.lines.map((line, i) => (
