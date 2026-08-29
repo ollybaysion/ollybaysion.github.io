@@ -16,7 +16,7 @@ import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
 import { meanAngle } from '../lib/coords/arc.ts';
 import { labelPlacement } from '../lib/stage/label.ts';
-import { angleColor } from '../lib/stage/palette.ts';
+import { angleColor, categoryColor } from '../lib/stage/palette.ts';
 import { SEA_BANDS } from '../lib/stage/sea.ts';
 
 const posts = postsData.posts.map((post) => ({
@@ -52,6 +52,8 @@ const constellations = Object.entries(seriesData.series).flatMap(([name, members
 
 /** ALUMNI 줄 간격(시안: 32 · 58 · 84). */
 const ALUMNI_STRIDE = 26;
+/** 연도 열(x=0)과 약력 열(x=76) 사이의 홈. 호를 가리키는 점이 여기 앉는다. */
+const ALUMNI_DOT_X = 66;
 
 const PANEL_ROWS = [592, 624, 656, 688, 720];
 const REFLECTIONS = [
@@ -335,12 +337,27 @@ const REFLECTIONS = [
 						ALUMNI
 					</text>
 					{PROFILE.alumni.map((entry, i) => (
-						<text class="al-line" x="0" y={32 + i * ALUMNI_STRIDE} font-size="11.5">
-							<tspan class="mono" font-size="10.5" opacity="0.7">
-								{entry.years}
-							</tspan>
-							<tspan x="76">{entry.what}</tspan>
-						</text>
+						<>
+							{/*
+							  연도와 약력 사이 홈에 놓인 점 — 이 줄이 무대의 어느 호에 속하나.
+							  글 점·파도 행과 같은 색 문법이라 커피와 개발이 한눈에 갈린다.
+							*/}
+							{entry.category && (
+								<circle
+									class="al-dot"
+									cx={ALUMNI_DOT_X}
+									cy={32 + i * ALUMNI_STRIDE - 4}
+									r="2.5"
+									fill={categoryColor(entry.category)}
+								/>
+							)}
+							<text class="al-line" x="0" y={32 + i * ALUMNI_STRIDE} font-size="11.5">
+								<tspan class="mono" font-size="10.5" opacity="0.7">
+									{entry.years}
+								</tspan>
+								<tspan x="76">{entry.what}</tspan>
+							</text>
+						</>
 					))}
 				</g>
 			)
@@ -456,6 +473,11 @@ const REFLECTIONS = [
 
 	.al-line {
 		fill: #8f8c85;
+	}
+
+	/* 점만 색을 가진다 — 글자는 명함답게 조용하게 둔다. */
+	.al-dot {
+		opacity: 0.85;
 	}
 
 	/* 별자리 — 평시엔 희미하게, 호버하면 점등(SeriesMain.dc.html 정본). */
