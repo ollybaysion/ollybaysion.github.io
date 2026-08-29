@@ -6,6 +6,7 @@
     "node": ">=22.18.0"
   },
   "scripts": {
+    "new": "node scripts/new-post.mjs",
     "coords": "node scripts/assign-coords.mjs",
     "coords:check": "node scripts/assign-coords.mjs --check",
     "derived": "node scripts/build-derived.mjs",
