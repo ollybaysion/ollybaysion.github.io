@@ -27,7 +27,11 @@ export async function writeJson(filePath, value) {
 }
 
 async function listContentFiles(dir) {
-	const entries = await readdir(dir, { withFileTypes: true });
+	// 글이 하나도 없으면 디렉토리 자체가 없을 수 있다(빈 블로그·첫 글 직전).
+	const entries = await readdir(dir, { withFileTypes: true }).catch((err) => {
+		if (err.code === 'ENOENT') return [];
+		throw err;
+	});
 	const files = [];
 	for (const entry of entries) {
 		const full = path.join(dir, entry.name);
