@@ -38,6 +38,7 @@ const placed = posts.map((post) => {
 		category: post.category,
 		date: post.date,
 		tags: post.tags,
+		readingMinutes: post.readingMinutes,
 		series: post.series,
 		episode: post.episode,
 		angle: entry.angle,

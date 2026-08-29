@@ -1,0 +1,32 @@
+---
+/**
+ * 카테고리 한 종의 목록. 메인의 "목록 자세히 →"가 여기로 온다
+ * (`/list/{카테고리}/?x=&y=` — 쿼리는 메인에서 고른 자리다).
+ *
+ * 글이 한 편도 없는 카테고리는 아예 길을 내지 않는다.
+ */
+import BaseHead from '../../components/BaseHead.astro';
+import ListScreen from '../../components/ListScreen.astro';
+import { SITE_TITLE } from '../../consts';
+import categoriesData from '../../data/generated/categories.json';
+import '../../styles/stage.css';
+
+export function getStaticPaths() {
+	return Object.entries(categoriesData.categories).map(([category, def]) => ({
+		params: { category },
+		props: { category, count: def.count },
+	}));
+}
+
+const { category, count } = Astro.props;
+---
+
+<!doctype html>
+<html lang="ko">
+	<head>
+		<BaseHead title={`${category} — ${SITE_TITLE}`} description={`${category} 글 ${count}편.`} />
+	</head>
+	<body class="list-page">
+		<ListScreen category={category} />
+	</body>
+</html>

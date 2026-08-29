@@ -40,3 +40,8 @@ body.stage-page {
   height: 100dvh;
   overflow: hidden;
 }
+
+/* 목록·글 화면은 세로로 흐른다. 가로는 무대가 채우니 가로 스크롤만 막는다. */
+body.list-page {
+  overflow-x: hidden;
+}
