@@ -1,0 +1,521 @@
+---
+/**
+ * 메인 무대 — 픽셀 정본 = `~/repo/blog-screens/Main.dc.html`
+ * (별자리는 `SeriesMain.dc.html`).
+ *
+ * 정본이 손으로 박아둔 글 16편 자리에 원장의 진짜 좌표가 들어간다.
+ * 점 색·이름표 자리는 정본 값을 베끼지 않고 `src/lib/stage/`에서 다시 만든다
+ * (정본 재현은 `test/stage/*.test.ts`가 지킨다).
+ *
+ * 캡션·라벨 없는 순수 장면 — 화면에 보이는 글자는 무대의 일부뿐이다.
+ * 눈에 보이지 않는 목록(.stage-index)은 키보드·크롤러용 통로다.
+ */
+import categoriesData from '../data/generated/categories.json';
+import postsData from '../data/generated/posts.json';
+import seriesData from '../data/generated/series.json';
+import { labelPlacement } from '../lib/stage/label.ts';
+import { angleColor } from '../lib/stage/palette.ts';
+
+const posts = postsData.posts.map((post) => ({
+	...post,
+	color: angleColor(post.angle),
+	label: labelPlacement(post.angle, post),
+}));
+
+const counts = Object.entries(categoriesData.categories).map(
+	([name, def]) => [name, def.count] as const,
+);
+/** 무대가 쉴 때 빛구멍 안에 앉아 있는 이름 — 글이 가장 많은 카테고리. */
+const resting = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+
+const bySlug = new Map(posts.map((post) => [post.slug, post]));
+/** 시리즈 별자리 — 회차 순으로 이은 선. 멤버가 하나면 점 하나짜리 별자리다. */
+const constellations = Object.entries(seriesData.series).flatMap(([name, members]) => {
+	const nodes = members
+		.map((member) => ({ ...member, post: bySlug.get(member.slug) }))
+		.filter((node) => node.post !== undefined)
+		.map((node) => ({ episode: node.episode, x: node.post!.x, y: node.post!.y }));
+	if (nodes.length === 0) return [];
+
+	// 원형 평균 — 별자리가 호 경계를 넘어가도 색이 반대편으로 튀지 않는다.
+	const sum = members.reduce(
+		(acc, member) => {
+			const a = (member.angle * Math.PI) / 180;
+			return { x: acc.x + Math.cos(a), y: acc.y + Math.sin(a) };
+		},
+		{ x: 0, y: 0 },
+	);
+	const mean = (Math.atan2(sum.y, sum.x) * 180) / Math.PI;
+	const last = nodes[nodes.length - 1]!;
+	return [
+		{
+			name,
+			href: `/series/${encodeURIComponent(name)}/`,
+			color: angleColor(mean),
+			path: nodes.map((node) => `${node.x.toFixed(1)},${node.y.toFixed(1)}`).join(' L'),
+			nodes,
+			label: { x: last.x + 14, y: last.y + 4 },
+			caption: `${nodes.length}화 연재 · 클릭 = 시리즈 목록`,
+		},
+	];
+});
+
+const PANEL_ROWS = [592, 624, 656, 688, 720];
+const REFLECTIONS = [
+	{ x: 305, y: 625, w: 90, o: 0.75 },
+	{ x: 322, y: 642, w: 56, o: 0.6 },
+	{ x: 295, y: 662, w: 110, o: 0.5 },
+	{ x: 320, y: 684, w: 60, o: 0.42 },
+	{ x: 308, y: 710, w: 84, o: 0.34 },
+	{ x: 328, y: 737, w: 44, o: 0.26 },
+	{ x: 318, y: 767, w: 64, o: 0.18 },
+];
+---
+
+<div class="stage">
+	<svg
+		id="hoverscene"
+		viewBox="0 0 700 790"
+		aria-hidden="true"
+		data-d-max={postsData.dMax}
+		data-counts={JSON.stringify(Object.fromEntries(counts))}
+	>
+		<defs>
+			<radialGradient id="hap-light">
+				<stop offset="0%" stop-color="#fffdf4"></stop>
+				<stop offset="70%" stop-color="#fffdf4"></stop>
+				<stop offset="100%" stop-color="#eeddb8"></stop>
+			</radialGradient>
+			<radialGradient id="hap-bloom">
+				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.45"></stop>
+				<stop offset="45%" stop-color="#d9a154" stop-opacity="0.158"></stop>
+				<stop offset="100%" stop-color="#d9a154" stop-opacity="0"></stop>
+			</radialGradient>
+			<radialGradient id="hoverhalo">
+				<stop offset="0%" stop-color="#d9a154" stop-opacity="0"></stop>
+				<stop offset="62%" stop-color="#d9a154" stop-opacity="0"></stop>
+				<stop offset="76%" stop-color="#d9a154" stop-opacity="0.3"></stop>
+				<stop offset="100%" stop-color="#d9a154" stop-opacity="0"></stop>
+			</radialGradient>
+			<radialGradient id="hvig" cx="0.5" cy="0.42" r="0.8">
+				<stop offset="0%" stop-color="#000000" stop-opacity="0"></stop>
+				<stop offset="68%" stop-color="#000000" stop-opacity="0"></stop>
+				<stop offset="100%" stop-color="#000000" stop-opacity="0.34"></stop>
+			</radialGradient>
+			<filter id="grainw">
+				<feTurbulence
+					type="fractalNoise"
+					baseFrequency="0.8"
+					numOctaves="2"
+					seed="7"
+					stitchTiles="stitch"></feTurbulence>
+				<feColorMatrix
+					type="matrix"
+					values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.6 0.6 0.6 0 0"></feColorMatrix>
+			</filter>
+			<filter id="punch" x="-15%" y="-15%" width="130%" height="130%">
+				<feTurbulence
+					type="fractalNoise"
+					baseFrequency="0.045"
+					numOctaves="3"
+					seed="4"
+					result="pn"></feTurbulence>
+				<feDisplacementMap in="SourceGraphic" in2="pn" scale="6"></feDisplacementMap>
+			</filter>
+			<filter id="soften" x="-20%" y="-20%" width="140%" height="140%">
+				<feGaussianBlur stdDeviation="3"></feGaussianBlur>
+			</filter>
+			<radialGradient id="clothfield">
+				<stop offset="0%" stop-color="#cfc9bd" stop-opacity="0"></stop>
+				<stop offset="36%" stop-color="#cfc9bd" stop-opacity="0"></stop>
+				<stop offset="46%" stop-color="#cfc9bd" stop-opacity="0.13"></stop>
+				<stop offset="62%" stop-color="#cfc9bd" stop-opacity="0.08"></stop>
+				<stop offset="100%" stop-color="#cfc9bd" stop-opacity="0"></stop>
+			</radialGradient>
+			<radialGradient id="beamgrad" gradientUnits="userSpaceOnUse" cx="350" cy="235" r="340">
+				<stop offset="0.26" stop-color="#d9a154" stop-opacity="0.34"></stop>
+				<stop offset="0.55" stop-color="#d9a154" stop-opacity="0.15"></stop>
+				<stop offset="1" stop-color="#d9a154" stop-opacity="0"></stop>
+			</radialGradient>
+			<filter id="beamblur" x="-40%" y="-40%" width="180%" height="180%">
+				<feGaussianBlur stdDeviation="5"></feGaussianBlur>
+			</filter>
+			<clipPath id="seaclip"><rect x="0" y="590" width="700" height="200"></rect></clipPath>
+		</defs>
+
+		<circle cx="350" cy="235" r="210" fill="url(#clothfield)"></circle>
+		<path id="beam" d="" fill="url(#beamgrad)" opacity="0" filter="url(#beamblur)"></path>
+		<circle cx="350" cy="235" r="150" fill="url(#hoverhalo)"></circle>
+		<circle cx="350" cy="235" r="200" fill="url(#hap-bloom)"></circle>
+		<circle cx="350" cy="235" r="95" fill="url(#hap-light)" filter="url(#punch)"></circle>
+		<circle cx="350" cy="235" r="48" fill="#ffffff" opacity="0.55" filter="url(#soften)"></circle>
+
+		{
+			posts.map((post) => (
+				<g
+					class="post"
+					data-a={post.angle}
+					data-r={post.radius}
+					data-slug={post.slug}
+					data-category={post.category}
+				>
+					<circle cx={post.x.toFixed(1)} cy={post.y.toFixed(1)} r="1.6" fill={post.color} opacity="0" />
+					<text
+						x={post.label.x.toFixed(1)}
+						y={post.label.y.toFixed(1)}
+						text-anchor={post.label.anchor}
+						font-size="11.5"
+						fill="#cfccc4"
+						opacity="0">
+						{post.title}
+					</text>
+				</g>
+			))
+		}
+
+		<text id="c-name" x="350" y="231" text-anchor="middle" font-size="22" font-weight="600" fill="#3f382e"
+			>{resting?.[0] ?? ''}</text
+		>
+		<text id="c-count" x="350" y="257" text-anchor="middle" font-size="13" fill="#6b5f4d"
+			>{resting ? `${resting[1]}편` : ''}</text
+		>
+		<text id="alumni" x="350" y="552" text-anchor="middle" font-size="11" letter-spacing="3" fill="#8f8c85"
+			>ALUMNI</text
+		>
+
+		<line x1="0" y1="590" x2="700" y2="590" stroke="#2a2a2e" stroke-width="1.5" opacity="0.55"></line>
+		<g clip-path="url(#seaclip)" opacity="0.3">
+			<g transform="translate(0,457) scale(0.7)">
+				<path
+					d="M 0.00,0.00 L 1000.00,0.00 L 1000.00,284.56 C 949.75,282.94 775.54,281.62 698.49,274.82 C 621.44,268.01 583.75,251.37 537.69,243.73 C 491.62,236.09 447.24,231.26 422.11,229.00 C 396.98,226.74 417.09,225.99 386.93,230.17 C 356.78,234.35 288.11,240.38 241.21,254.09 C 194.30,267.79 145.73,297.17 105.53,312.40 C 65.33,327.64 17.59,339.99 0.00,345.51 Z"
+					fill="#262626"></path>
+				<path
+					d="M 0.00,345.51 C 17.59,339.99 65.33,327.64 105.53,312.40 C 145.73,297.17 194.30,267.79 241.21,254.09 C 288.11,240.38 356.78,234.35 386.93,230.17 C 417.09,225.99 396.98,226.74 422.11,229.00 C 447.24,231.26 491.62,236.09 537.69,243.73 C 583.75,251.37 621.44,268.01 698.49,274.82 C 775.54,281.62 949.75,282.94 1000.00,284.56 L 1000.00,231.87 C 949.75,232.62 794.81,225.02 698.49,236.39 C 602.18,247.75 490.79,289.00 422.11,300.08 C 353.43,311.17 315.75,301.29 286.43,302.88 C 257.12,304.47 293.97,289.95 246.23,309.61 C 198.49,329.27 41.04,402.30 0.00,420.84 Z"
+					fill="#454545"></path>
+				<path
+					d="M 0.00,420.84 C 41.04,402.30 198.49,329.27 246.23,309.61 C 293.97,289.95 257.12,304.47 286.43,302.88 C 315.75,301.29 353.43,311.17 422.11,300.08 C 490.79,289.00 602.18,247.75 698.49,236.39 C 794.81,225.02 949.75,232.62 1000.00,231.87 L 1000.00,373.23 C 953.94,363.72 805.70,330.44 723.62,316.18 C 641.54,301.91 551.09,291.42 507.54,287.66 C 463.99,283.91 481.57,289.68 462.31,293.65 C 443.05,297.61 422.95,302.43 391.96,311.44 C 360.97,320.45 301.51,341.26 276.38,347.68 C 251.26,354.10 251.26,350.32 241.21,349.93 C 231.16,349.55 256.28,358.01 216.08,345.37 C 175.88,332.73 36.01,285.97 0.00,274.09 Z"
+					fill="#656565"></path>
+				<path
+					d="M 0.00,274.09 C 36.01,285.97 175.88,332.73 216.08,345.37 C 256.28,358.01 231.16,349.55 241.21,349.93 C 251.26,350.32 251.26,354.10 276.38,347.68 C 301.51,341.26 360.97,320.45 391.96,311.44 C 422.95,302.43 443.05,297.61 462.31,293.65 C 481.57,289.68 463.99,283.91 507.54,287.66 C 551.09,291.42 641.54,301.91 723.62,316.18 C 805.70,330.44 953.94,363.72 1000.00,373.23 L 1000.00,451.54 C 973.20,449.29 881.91,445.83 839.20,438.05 C 796.48,430.27 790.62,416.66 743.72,404.88 C 696.82,393.09 599.66,374.29 557.79,367.32 C 515.91,360.35 520.10,369.76 492.46,363.07 C 464.82,356.38 438.02,346.34 391.96,327.20 C 345.90,308.06 263.82,263.68 216.08,248.23 C 168.34,232.78 141.54,236.55 105.53,234.51 C 69.51,232.46 17.59,235.71 0.00,235.95 Z"
+					fill="#858585"></path>
+				<path
+					d="M 0.00,235.95 C 17.59,235.71 69.51,232.46 105.53,234.51 C 141.54,236.55 168.34,232.78 216.08,248.23 C 263.82,263.68 345.90,308.06 391.96,327.20 C 438.02,346.34 464.82,356.38 492.46,363.07 C 520.10,369.76 515.91,360.35 557.79,367.32 C 599.66,374.29 696.82,393.09 743.72,404.88 C 790.62,416.66 796.48,430.27 839.20,438.05 C 881.91,445.83 973.20,449.29 1000.00,451.54 L 1000.00,318.52 C 974.04,324.12 890.28,339.47 844.22,352.11 C 798.16,364.76 762.14,382.87 723.62,394.40 C 685.09,405.93 640.70,415.33 613.07,421.27 C 585.43,427.20 587.10,427.26 557.79,430.00 C 528.48,432.74 474.04,437.06 437.19,437.71 C 400.34,438.37 371.86,434.15 336.68,433.94 C 301.51,433.72 262.14,437.38 226.13,436.40 C 190.12,435.42 158.29,432.09 120.60,428.05 C 82.91,424.00 20.10,414.79 0.00,412.14 Z"
+					fill="#a4a4a4"></path>
+				<path
+					d="M 0.00,412.14 C 20.10,414.79 82.91,424.00 120.60,428.05 C 158.29,432.09 190.12,435.42 226.13,436.40 C 262.14,437.38 301.51,433.72 336.68,433.94 C 371.86,434.15 400.34,438.37 437.19,437.71 C 474.04,437.06 528.48,432.74 557.79,430.00 C 587.10,427.26 585.43,427.20 613.07,421.27 C 640.70,415.33 685.09,405.93 723.62,394.40 C 762.14,382.87 798.16,364.76 844.22,352.11 C 890.28,339.47 974.04,324.12 1000.00,318.52 L 1000.00,423.11 C 975.71,427.24 900.34,442.25 854.27,447.88 C 808.21,453.51 775.54,458.98 723.62,456.88 C 671.69,454.78 590.45,441.88 542.71,435.27 C 494.97,428.66 471.52,421.09 437.19,417.24 C 402.85,413.39 360.13,414.13 336.68,412.19 C 313.23,410.24 324.12,407.22 296.48,405.56 C 268.84,403.90 220.27,405.27 170.85,402.22 C 121.44,399.16 28.48,389.73 0.00,387.24 Z"
+					fill="#c4c4c4"></path>
+				<path
+					d="M 0.00,387.24 C 28.48,389.73 121.44,399.16 170.85,402.22 C 220.27,405.27 268.84,403.90 296.48,405.56 C 324.12,407.22 313.23,410.24 336.68,412.19 C 360.13,414.13 402.85,413.39 437.19,417.24 C 471.52,421.09 494.97,428.66 542.71,435.27 C 590.45,441.88 671.69,454.78 723.62,456.88 C 775.54,458.98 808.21,453.51 854.27,447.88 C 900.34,442.25 975.71,427.24 1000.00,423.11 L 1000.00,727.00 L 0.00,727.00 Z"
+					fill="#e4e4e4"></path>
+			</g>
+		</g>
+
+		{
+			REFLECTIONS.map((bar) => (
+				<rect
+					class="refl"
+					x={bar.x}
+					y={bar.y}
+					width={bar.w}
+					height="3"
+					rx="1.5"
+					fill="#d9a154"
+					opacity={bar.o}
+				/>
+			))
+		}
+
+		{
+			constellations.map((series) => (
+				<a class="series" href={series.href} aria-label={`시리즈 ${series.name}`}>
+					<path
+						class="series-hit"
+						d={`M${series.path}`}
+						fill="none"
+						stroke="#000"
+						stroke-width="30"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						pointer-events="stroke"
+					/>
+					<path
+						class="series-line"
+						d={`M${series.path}`}
+						stroke={series.color}
+						stroke-width="1"
+						fill="none"
+					/>
+					{series.nodes.map((node) => (
+						<>
+							<circle class="series-node" cx={node.x.toFixed(1)} cy={node.y.toFixed(1)} fill={series.color} />
+							<text
+								class="series-episode"
+								x={(node.x + 8).toFixed(1)}
+								y={(node.y - 8).toFixed(1)}
+								font-size="10"
+								fill={series.color}>
+								{node.episode}
+							</text>
+						</>
+					))}
+					<text
+						class="series-name"
+						x={series.label.x.toFixed(1)}
+						y={series.label.y.toFixed(1)}
+						font-size="12"
+						font-weight="600"
+						fill={series.color}>
+						{series.name}
+					</text>
+					<text
+						class="series-caption"
+						x={series.label.x.toFixed(1)}
+						y={(series.label.y + 17).toFixed(1)}
+						font-size="10"
+						fill="#8f8c85">
+						{series.caption}
+					</text>
+				</a>
+			))
+		}
+
+		<g id="cli">
+			<line x1="0" y1="470" x2="700" y2="470" stroke="#e8e6e1" stroke-width="1.8" opacity="0.6"></line>
+			<line x1="0" y1="514" x2="700" y2="514" stroke="#e8e6e1" stroke-width="1.8" opacity="0.6"></line>
+			<text x="52" y="497" class="mono" font-size="13" fill="#e8e6e1">❯</text>
+			<text id="cli-text" x="74" y="497" class="mono" font-size="13" fill="#e8e6e1"></text>
+			<rect id="cli-caret" x="74" y="484" width="7" height="16" fill="#e8e6e1" opacity="0"></rect>
+		</g>
+
+		<g id="panel" opacity="0" transform="translate(0,290)">
+			<path id="p-wavefill" d="M0,790 L0,536 L700,536 L700,790 Z" fill="#131316" opacity="0.97"></path>
+			<path
+				id="p-waveline"
+				d="M0,536 L700,536"
+				fill="none"
+				stroke="#e8e6e1"
+				stroke-width="1.3"
+				opacity="0.35"
+				stroke-linejoin="round"></path>
+			<text id="p-name" x="52" y="568" font-size="15" font-weight="600" fill="#e8e6e1"></text>
+			<text id="p-close" x="648" y="568" text-anchor="end" font-size="11.5" fill="#8f8c85">내리기 ↓</text>
+			{
+				PANEL_ROWS.map((y) => (
+					<a class="prow" aria-hidden="true" tabindex="-1">
+						<circle cx="56" cy={y} r="3" fill="#8f8c85" opacity="0" />
+						<text class="pt" x="76" y={y + 4} font-size="13.5" fill="#d8d5cd" opacity="0" />
+						<text class="pd" x="648" y={y + 4} text-anchor="end" font-size="11" fill="#8f8c85" opacity="0" />
+					</a>
+				))
+			}
+			<a id="p-more" aria-hidden="true" tabindex="-1">
+				<text x="52" y="762" font-size="11.5" fill="#8f8c85" opacity="0.8"></text>
+			</a>
+			<text x="648" y="762" text-anchor="end" font-size="10.5" fill="#8f8c85" opacity="0.8"
+				>유사한 순 — 클릭 지점과 글 좌표의 거리</text
+			>
+		</g>
+
+		<g id="modal" opacity="0">
+			<rect x="0" y="0" width="700" height="790" fill="#000000" opacity="0.5"></rect>
+			<rect
+				x="140"
+				y="328"
+				width="420"
+				height="134"
+				fill="#131316"
+				stroke="#e8e6e1"
+				stroke-width="1.2"
+				stroke-opacity="0.5"></rect>
+			<text id="m-cmd" x="170" y="376" class="mono" font-size="14" fill="#e8e6e1"></text>
+			<text x="170" y="408" font-size="12.5" fill="#8f8c85">아직 아무 데도 연결되지 않은 입력이에요</text>
+			<text x="170" y="440" font-size="11" fill="#8f8c85" opacity="0.7">아무 곳이나 클릭해 닫기</text>
+		</g>
+
+		<rect x="0" y="0" width="700" height="790" fill="url(#hvig)" pointer-events="none"></rect>
+		<rect x="0" y="0" width="700" height="790" filter="url(#grainw)" opacity="0.05" pointer-events="none"
+		></rect>
+		<line
+			x1="118"
+			y1="0"
+			x2="118"
+			y2="790"
+			stroke="#ffffff"
+			stroke-width="0.6"
+			opacity="0.04"
+			pointer-events="none"></line>
+		<line
+			x1="606"
+			y1="0"
+			x2="606"
+			y2="790"
+			stroke="#ffffff"
+			stroke-width="0.9"
+			opacity="0.056"
+			pointer-events="none"></line>
+	</svg>
+
+	<nav class="stage-index" aria-label="글 목록">
+		<h2>글</h2>
+		<ul>
+			{posts.map((post) => <li><a href={`/blog/${post.slug}/`}>{post.title}</a></li>)}
+		</ul>
+		{
+			constellations.length > 0 && (
+				<>
+					<h2>시리즈</h2>
+					<ul>
+						{constellations.map((series) => (
+							<li>
+								<a href={series.href}>{series.name}</a>
+							</li>
+						))}
+					</ul>
+				</>
+			)
+		}
+	</nav>
+</div>
+
+<style>
+	.stage {
+		width: min(700px, 100%);
+		margin: 0 auto;
+		padding-top: 20px;
+	}
+
+	#hoverscene {
+		display: block;
+		width: 100%;
+		height: auto;
+		touch-action: manipulation;
+	}
+
+	#hoverscene text {
+		font-family: var(--stage-sans);
+	}
+
+	#hoverscene #c-name,
+	#hoverscene #p-name,
+	#hoverscene .series-name {
+		font-family: var(--stage-serif);
+	}
+
+	#hoverscene .mono,
+	#hoverscene .pd,
+	#hoverscene .series-episode {
+		font-family: var(--stage-mono);
+	}
+
+	.post {
+		pointer-events: none;
+	}
+
+	/* 별자리 — 평시엔 희미하게, 호버하면 점등(SeriesMain.dc.html 정본). */
+	.series {
+		cursor: pointer;
+	}
+
+	.series-hit {
+		stroke-opacity: 0;
+	}
+
+	.series-line {
+		opacity: 0.16;
+	}
+
+	.series-node {
+		r: 2;
+		opacity: 0.35;
+	}
+
+	.series-name {
+		opacity: 0.45;
+	}
+
+	.series-episode,
+	.series-caption {
+		opacity: 0;
+	}
+
+	.series-line,
+	.series-node,
+	.series-name,
+	.series-episode,
+	.series-caption {
+		transition:
+			opacity 0.18s ease,
+			r 0.18s ease;
+	}
+
+	.series:hover .series-line,
+	.series:focus-visible .series-line {
+		opacity: 0.6;
+	}
+
+	.series:hover .series-node,
+	.series:focus-visible .series-node {
+		r: 3;
+		opacity: 0.95;
+	}
+
+	.series:hover .series-name,
+	.series:focus-visible .series-name {
+		opacity: 1;
+	}
+
+	.series:hover .series-episode,
+	.series:focus-visible .series-episode {
+		opacity: 0.9;
+	}
+
+	.series:hover .series-caption,
+	.series:focus-visible .series-caption {
+		opacity: 1;
+	}
+
+	/* 모달은 document 단에서 클릭을 받는다 — 닫힌 채로 무대를 덮지 않게. */
+	#modal {
+		pointer-events: none;
+	}
+
+	/* 파도 목록이 올라와 있을 때만 행이 링크로 산다. */
+	#panel {
+		pointer-events: none;
+	}
+
+	#panel.is-open {
+		pointer-events: auto;
+	}
+
+	#panel.is-open .prow,
+	#panel.is-open #p-more {
+		cursor: pointer;
+	}
+
+	/* 화면에는 없지만 키보드와 크롤러에는 있는 통로. */
+	.stage-index {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.series-line,
+		.series-node,
+		.series-name,
+		.series-episode,
+		.series-caption {
+			transition: none;
+		}
+	}
+</style>
+
+<script>
+	import '../scripts/main-stage.ts';
+</script>

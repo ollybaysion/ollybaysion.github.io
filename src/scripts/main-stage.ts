@@ -1,0 +1,479 @@
+/**
+ * 메인 무대의 움직임 — 참조 구현 = `~/repo/blog-screens/Main.dc.html`의
+ * `<script data-dc-script>`. 기하(메타볼 goo·파도 능선·감쇠 진동)는 그대로 옮겼고,
+ * 정본이 지어낸 앵커 목록만 카테고리 등록부로 갈아끼웠다.
+ *
+ * 호버 = 빛구멍과 커서를 잇는 막, 막 범위 안 글 점등.
+ * 클릭 = 유사도 파도 목록(거리순), 다른 지점 클릭 = 리로드, 내리기 = 닫기.
+ * CLI = 데모. 명령 체계가 미확정이라 입력 확인 모달까지만 간다.
+ */
+import { angleColor, nearestCategory } from "../lib/stage/palette.ts";
+
+const VIEW_W = 700;
+const VIEW_H = 790;
+/** 빛구멍 중심. 좌표 엔진의 CENTER와 같은 값이다. */
+const CX = 350;
+const CY = 235;
+
+/** 이 선 아래는 원 구역이 아니다 — CLI·바다·패널의 영역. */
+const CLI_TOP = 470;
+const CLI_BOTTOM = 514;
+/** 패널이 다 올라왔을 때의 위쪽 기준선. */
+const PANEL_TOP = 524;
+/** 파도 능선이 앉는 y. */
+const WAVE_Y = 536;
+
+/** 메타볼 상수 — 확정값이라 건드리지 않는다. */
+const R1 = 95;
+const R2 = 4;
+const GOO_V = 0.66;
+const GOO_H = 2.4;
+
+/** 파도 목록 제목의 "N편" — 클릭 지점에서 이 거리 안에 든 글. */
+const NEAR_RADIUS = 160;
+/** 빛구멍 안 "N편 근방" — 커서 각도에서 이만큼 안에 든 글. */
+const NEAR_DEG = 35;
+
+interface Post {
+  angle: number;
+  slug: string;
+  category: string;
+  x: number;
+  y: number;
+  dot: SVGCircleElement;
+  label: SVGTextElement;
+}
+
+interface Row {
+  link: SVGAElement;
+  dot: SVGCircleElement;
+  title: SVGTextElement;
+  distance: SVGTextElement;
+}
+
+function angularDistance(a: number, b: number): number {
+  const d = Math.abs(a - b);
+  return d > 180 ? 360 - d : d;
+}
+
+function clamp1(n: number): number {
+  return Math.max(-1, Math.min(1, n));
+}
+
+function start(svg: SVGSVGElement): void {
+  const dMax = Number(svg.dataset.dMax) || 390;
+  const counts: Record<string, number> = JSON.parse(svg.dataset.counts ?? "{}");
+
+  const posts: Post[] = [...svg.querySelectorAll<SVGGElement>(".post")].map(
+    (g) => {
+      const angle = Number(g.dataset.a);
+      const radius = Number(g.dataset.r);
+      const a = (angle * Math.PI) / 180;
+      return {
+        angle,
+        slug: g.dataset.slug ?? "",
+        category: g.dataset.category ?? "",
+        x: CX + radius * Math.cos(a),
+        y: CY + radius * Math.sin(a),
+        dot: g.querySelector("circle")!,
+        label: g.querySelector("text")!,
+      };
+    },
+  );
+
+  const beam = svg.querySelector<SVGPathElement>("#beam")!;
+  const beamStops = [...svg.querySelectorAll<SVGStopElement>("#beamgrad stop")];
+  const haloStops = [
+    ...svg.querySelectorAll<SVGStopElement>("#hoverhalo stop"),
+  ];
+  const bloomStops = [
+    ...svg.querySelectorAll<SVGStopElement>("#hap-bloom stop"),
+  ];
+  const reflections = [...svg.querySelectorAll<SVGRectElement>(".refl")];
+  const cName = svg.querySelector<SVGTextElement>("#c-name")!;
+  const cCount = svg.querySelector<SVGTextElement>("#c-count")!;
+  const alumni = svg.querySelector<SVGTextElement>("#alumni")!;
+  const panel = svg.querySelector<SVGGElement>("#panel")!;
+  const waveFill = svg.querySelector<SVGPathElement>("#p-wavefill")!;
+  const waveLine = svg.querySelector<SVGPathElement>("#p-waveline")!;
+  const pName = svg.querySelector<SVGTextElement>("#p-name")!;
+  const pMore = svg.querySelector<SVGAElement>("#p-more")!;
+  const pMoreText = pMore.querySelector<SVGTextElement>("text")!;
+  const cliText = svg.querySelector<SVGTextElement>("#cli-text")!;
+  const cliCaret = svg.querySelector<SVGRectElement>("#cli-caret")!;
+  const modal = svg.querySelector<SVGGElement>("#modal")!;
+  const modalCmd = svg.querySelector<SVGTextElement>("#m-cmd")!;
+
+  const rows: Row[] = [...svg.querySelectorAll<SVGAElement>(".prow")].map(
+    (link) => ({
+      link,
+      dot: link.querySelector("circle")!,
+      title: link.querySelector<SVGTextElement>(".pt")!,
+      distance: link.querySelector<SVGTextElement>(".pd")!,
+    }),
+  );
+
+  const press = { x: 350, y: 115, op: 0 };
+  const target = { x: 350, y: 115, over: false };
+  const panelState = { y: 290, op: 0, open: false, t: 0, pulse: 0 };
+  const modalState = { open: false, op: 0 };
+  let phase = 0;
+  let lastT = 0;
+  let command = "";
+  let raf = 0;
+
+  /** 화면 좌표 → viewBox 좌표. 보드가 줄어들어도 계산은 700×790 위에서 한다. */
+  function toStage(e: {
+    clientX: number;
+    clientY: number;
+  }): { x: number; y: number } | null {
+    const b = svg.getBoundingClientRect();
+    if (b.width === 0 || b.height === 0) return null;
+    const inside =
+      e.clientX >= b.left &&
+      e.clientX <= b.right &&
+      e.clientY >= b.top &&
+      e.clientY <= b.bottom;
+    if (!inside) return null;
+    return {
+      x: ((e.clientX - b.left) * VIEW_W) / b.width,
+      y: ((e.clientY - b.top) * VIEW_H) / b.height,
+    };
+  }
+
+  function openPanel(x: number, y: number): void {
+    const sorted = posts
+      .map((post) => {
+        const d = Math.hypot(x - post.x, y - post.y);
+        return { post, d, proximity: Math.max(0, 1 - d / dMax) };
+      })
+      .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug));
+
+    const near = sorted.filter((entry) => entry.d < NEAR_RADIUS).length;
+    let angle = (Math.atan2(y - CY, x - CX) * 180) / Math.PI;
+    if (angle < 0) angle += 360;
+    const category = nearestCategory(angle);
+
+    pName.textContent = `${category} 근방 · ${near}편`;
+    pMoreText.textContent = `목록 자세히 · ${counts[category] ?? 0}편 →`;
+    pMore.setAttribute(
+      "href",
+      `/list/${encodeURIComponent(category)}/?x=${x.toFixed(1)}&y=${y.toFixed(1)}`,
+    );
+
+    rows.forEach((row, i) => {
+      const entry = sorted[i];
+      if (!entry) {
+        row.link.removeAttribute("href");
+        row.dot.setAttribute("opacity", "0");
+        row.title.setAttribute("opacity", "0");
+        row.distance.setAttribute("opacity", "0");
+        return;
+      }
+      row.link.setAttribute("href", `/blog/${entry.post.slug}/`);
+      row.dot.setAttribute(
+        "fill",
+        entry.post.dot.getAttribute("fill") ?? "#8f8c85",
+      );
+      row.dot.setAttribute("opacity", "1");
+      row.title.textContent = entry.post.label.textContent;
+      row.title.setAttribute("opacity", "1");
+      row.distance.textContent = `${Math.round(entry.proximity * 100)}%`;
+      row.distance.setAttribute("opacity", "0.8");
+    });
+  }
+
+  function execCommand(): void {
+    const typed = command.trim();
+    if (!typed) return;
+    command = "";
+    modalCmd.textContent = `❯ ${typed}`;
+    modalState.open = true;
+  }
+
+  function onMove(e: PointerEvent): void {
+    const point = toStage(e);
+    target.over = point !== null;
+    if (point) {
+      target.x = point.x;
+      target.y = point.y;
+    }
+  }
+
+  function onLeave(): void {
+    target.over = false;
+  }
+
+  function onDown(e: PointerEvent): void {
+    const point = toStage(e);
+    if (!point) return;
+    // 터치는 pointermove 없이 바로 눌린다 — 커서를 손가락 자리로 옮겨준다.
+    target.over = true;
+    target.x = point.x;
+    target.y = point.y;
+
+    if (modalState.open) {
+      modalState.open = false;
+      return;
+    }
+    if (panelState.open) {
+      const panelTop = PANEL_TOP + panelState.y;
+      if (point.y > panelTop) {
+        // 패널 안 — 우상단은 내리기, 나머지 행은 링크가 직접 받는다.
+        if (point.x > 560 && point.y < panelTop + 62) panelState.open = false;
+        return;
+      }
+      // 원 구역 클릭만 리로드 — CLI·그 아래는 무시.
+      if (point.y >= CLI_TOP) return;
+      openPanel(point.x, point.y);
+      panelState.pulse = 1;
+      return;
+    }
+    if (point.y >= CLI_TOP) return;
+    openPanel(point.x, point.y);
+    panelState.open = true;
+    panelState.t = 0;
+  }
+
+  function onKey(e: KeyboardEvent): void {
+    const node = e.target as HTMLElement | null;
+    // 진짜 입력칸에 타이핑 중이면 무대가 가로채지 않는다.
+    if (
+      node?.isContentEditable ||
+      /^(INPUT|TEXTAREA|SELECT)$/.test(node?.tagName ?? "")
+    )
+      return;
+    if (modalState.open) {
+      modalState.open = false;
+      e.preventDefault();
+      return;
+    }
+    // 마우스가 보드 위에 있을 때만 CLI가 입력을 받는다 (= 포커스).
+    if (!target.over) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "Enter") {
+      execCommand();
+      e.preventDefault();
+      return;
+    }
+    if (e.key === "Backspace") {
+      command = command.slice(0, -1);
+      e.preventDefault();
+      return;
+    }
+    if (e.key === "Escape") {
+      command = "";
+      return;
+    }
+    if (e.key.length === 1 && command.length < 40) {
+      command += e.key;
+      e.preventDefault();
+    }
+  }
+
+  function drawBeam(distance: number, theta: number): number {
+    function cl(n: number) {
+      return Math.acos(clamp1(n));
+    }
+    let u1 = 0;
+    let u2 = 0;
+    if (distance < R1 + R2) {
+      u1 = cl((R1 * R1 + distance * distance - R2 * R2) / (2 * R1 * distance));
+      u2 = cl((R2 * R2 + distance * distance - R1 * R1) / (2 * R2 * distance));
+    }
+    const spread = cl((R1 - R2) / distance);
+    const g1 = theta + u1 + (spread - u1) * GOO_V;
+    const g2 = theta - u1 - (spread - u1) * GOO_V;
+    const g3 = theta + Math.PI - u2 - (Math.PI - u2 - spread) * GOO_V;
+    const g4 = theta - Math.PI + u2 + (Math.PI - u2 - spread) * GOO_V;
+    const p1x = CX + R1 * Math.cos(g1);
+    const p1y = CY + R1 * Math.sin(g1);
+    const p2x = CX + R1 * Math.cos(g2);
+    const p2y = CY + R1 * Math.sin(g2);
+    const p3x = press.x + R2 * Math.cos(g3);
+    const p3y = press.y + R2 * Math.sin(g3);
+    const p4x = press.x + R2 * Math.cos(g4);
+    const p4y = press.y + R2 * Math.sin(g4);
+    const d13 = Math.hypot(p1x - p3x, p1y - p3y);
+    const hs =
+      Math.min(GOO_V * GOO_H, d13 / (R1 + R2)) *
+      Math.min(1, (distance * 2) / (R1 + R2));
+    const HP = Math.PI / 2;
+    const h1x = p1x + R1 * hs * Math.cos(g1 - HP);
+    const h1y = p1y + R1 * hs * Math.sin(g1 - HP);
+    const h2x = p2x + R1 * hs * Math.cos(g2 + HP);
+    const h2y = p2y + R1 * hs * Math.sin(g2 + HP);
+    const h3x = p3x + R2 * hs * Math.cos(g3 + HP);
+    const h3y = p3y + R2 * hs * Math.sin(g3 + HP);
+    const h4x = p4x + R2 * hs * Math.cos(g4 - HP);
+    const h4y = p4y + R2 * hs * Math.sin(g4 - HP);
+    const f = (n: number) => n.toFixed(1);
+    beam.setAttribute(
+      "d",
+      `M${f(p1x)},${f(p1y)} C${f(h1x)},${f(h1y)} ${f(h3x)},${f(h3y)} ${f(p3x)},${f(p3y)}` +
+        ` A${R2},${R2} 0 1 0 ${f(p4x)},${f(p4y)}` +
+        ` C${f(h4x)},${f(h4y)} ${f(h2x)},${f(h2y)} ${f(p2x)},${f(p2y)} Z`,
+    );
+    return spread * 0.8;
+  }
+
+  function frame(): void {
+    press.x += (target.x - press.x) * 0.16;
+    press.y += (target.y - press.y) * 0.16;
+    press.op += ((target.over ? 1 : 0) - press.op) * 0.08;
+
+    let angle = (Math.atan2(press.y - CY, press.x - CX) * 180) / Math.PI;
+    if (angle < 0) angle += 360;
+    const color = angleColor(angle);
+
+    // 빔: 빛구멍과 커서가 한 장의 막으로 이어지는 구(goo) — 커서가 천을 뚫어 당기는 느낌.
+    const bdx = press.x - CX;
+    const bdy = press.y - CY;
+    const distance = Math.hypot(bdx, bdy);
+    const theta = Math.atan2(bdy, bdx);
+    const beamOn = distance > R1 - R2 + 8 && press.y < CLI_TOP;
+    const width = beamOn ? drawBeam(distance, theta) : 0;
+    const beamOpacity = beamOn
+      ? 0.9 *
+        press.op *
+        Math.min(1, (distance - (R1 - R2 + 8)) / 45) *
+        Math.max(0, Math.min(1, (CLI_TOP - press.y) / 40))
+      : 0;
+    beam.setAttribute("opacity", beamOpacity.toFixed(3));
+    for (const stop of beamStops) stop.setAttribute("stop-color", color);
+
+    let near = 0;
+    for (const post of posts) {
+      const dx = press.x - post.x;
+      const dy = press.y - post.y;
+      const dist = Math.max(1, Math.hypot(dx, dy));
+      let glow = Math.exp(-((dist / 90) ** 2)) * press.op;
+      if (beamOn) {
+        // 빔 범위 안에 든 글도 함께 점등.
+        let da = Math.abs(Math.atan2(post.y - CY, post.x - CX) - theta);
+        if (da > Math.PI) da = 2 * Math.PI - da;
+        const pr = Math.hypot(post.x - CX, post.y - CY);
+        if (da < width * 1.2 && pr < distance + 45) {
+          glow = Math.max(
+            glow,
+            Math.exp(-((da / (width * 0.75)) ** 2)) * press.op * 0.8,
+          );
+        }
+      }
+      const pull = Math.exp(-((dist / 75) ** 2)) * 10 * press.op;
+      post.dot.setAttribute("cx", (post.x + (dx / dist) * pull).toFixed(1));
+      post.dot.setAttribute("cy", (post.y + (dy / dist) * pull).toFixed(1));
+      post.dot.setAttribute("r", (1.6 + 3.4 * glow).toFixed(2));
+      post.dot.setAttribute("opacity", Math.min(1, glow * 1.15).toFixed(2));
+      post.label.setAttribute(
+        "opacity",
+        Math.max(0, (glow - 0.4) * 1.9).toFixed(2),
+      );
+      if (angularDistance(post.angle, angle) < NEAR_DEG) near += 1;
+    }
+
+    for (const stop of haloStops) stop.setAttribute("stop-color", color);
+    for (const stop of bloomStops) stop.setAttribute("stop-color", color);
+    for (const bar of reflections) bar.setAttribute("fill", color);
+
+    if (press.op > 0.05) {
+      cName.textContent = nearestCategory(angle);
+      cCount.textContent = `${near}편 근방`;
+    }
+
+    const now = performance.now() / 1000;
+    const dt = lastT ? Math.min(0.05, now - lastT) : 0.016;
+    lastT = now;
+    phase += dt * 0.9;
+
+    const ps = panelState;
+    if (ps.open) {
+      // 파도가 밀려오듯: 빠르게 밀려와 살짝 넘치고(오버슈트) 가라앉는 감쇠 진동.
+      ps.t += dt;
+      const eased = 1 - Math.exp(-4.2 * ps.t) * Math.cos(3.4 * ps.t);
+      ps.y = 290 * (1 - eased);
+      ps.op += (1 - ps.op) * Math.min(1, dt * 9);
+    } else {
+      ps.y += (290 - ps.y) * Math.min(1, dt * 6);
+      ps.op += (0 - ps.op) * Math.min(1, dt * 6);
+    }
+    ps.pulse += (0 - ps.pulse) * Math.min(1, dt * 4);
+    const py =
+      ps.y - 16 * Math.sin(Math.PI * Math.min(1, 1 - ps.pulse)) * ps.pulse;
+
+    // 패널 상단 = 실제 파도 능선 (위상이 흘러가며 일렁임).
+    const A = 12;
+    const L = 260;
+    const pts: string[] = [];
+    for (let wx = 0; wx <= VIEW_W; wx += 14) {
+      const drift =
+        0.5 * Math.sin((2 * Math.PI * wx) / (L * 2.7) + phase * 1.7);
+      const th = (2 * Math.PI * wx) / L + phase + drift;
+      const skew = th + 0.45 * Math.sin(th);
+      const crest = ((1 + Math.cos(skew)) / 2) ** 2.2;
+      const chop =
+        0.1 * Math.sin((2 * Math.PI * wx) / (L * 0.23) + phase * 3.1);
+      pts.push(`${wx},${(WAVE_Y - A * (crest + chop)).toFixed(1)}`);
+    }
+    const edge = `M${pts.join(" L")}`;
+    waveFill.setAttribute("d", `${edge} L${VIEW_W},${VIEW_H} L0,${VIEW_H} Z`);
+    waveLine.setAttribute("d", edge);
+    panel.setAttribute("transform", `translate(0,${py.toFixed(1)})`);
+    panel.setAttribute("opacity", ps.op.toFixed(3));
+    panel.classList.toggle("is-open", ps.op > 0.5);
+
+    // ALUMNI는 사라지지 않고 파도 능선이 지나가며 덮는다.
+    const crestY = WAVE_Y - A + py;
+    alumni.setAttribute(
+      "opacity",
+      Math.max(0, Math.min(1, (crestY - 544) / 26)).toFixed(3),
+    );
+
+    // CLI: 캐럿은 줄에 마우스를 갖다 댔을 때만 (입력 중이면 유지).
+    cliText.textContent = command;
+    let width2 = 0;
+    try {
+      width2 = cliText.getComputedTextLength();
+    } catch {
+      width2 = command.length * 8;
+    }
+    cliCaret.setAttribute("x", (74 + width2 + 2).toFixed(1));
+    const nearCli =
+      target.over && target.y > CLI_TOP - 14 && target.y < CLI_BOTTOM + 14;
+    cliCaret.setAttribute(
+      "opacity",
+      ((nearCli || command) && Math.sin(now * 5.2) > -0.2 ? 0.7 : 0).toFixed(2),
+    );
+
+    modalState.op +=
+      ((modalState.open ? 1 : 0) - modalState.op) * Math.min(1, dt * 10);
+    modal.setAttribute("opacity", modalState.op.toFixed(3));
+  }
+
+  function tick(): void {
+    frame();
+    raf = requestAnimationFrame(tick);
+  }
+
+  function onVisibility(): void {
+    if (document.hidden) {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      return;
+    }
+    if (!raf) {
+      lastT = 0;
+      tick();
+    }
+  }
+
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerleave", onLeave);
+  document.addEventListener("pointerdown", onDown);
+  document.addEventListener("keydown", onKey);
+  document.addEventListener("visibilitychange", onVisibility);
+  tick();
+}
+
+const scene = document.getElementById("hoverscene");
+if (scene) start(scene as unknown as SVGSVGElement);
