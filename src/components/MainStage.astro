@@ -71,24 +71,35 @@ function needW(width: number, margin: number): number {
 /**
  * 이름 아래 제사(題詞).
  *
- * 시안의 11은 "무엇을 쓰는 곳인지" 알려주는 부제 크기였다. 제사는 하는 일이 달라서
- * 그 크기로는 32짜리 이름 밑에서 그냥 묻힌다. 낱말과 뜻풀이는 **같은 크기**로 선다 —
- * 크기가 갈리면 뜻풀이가 부제로 읽힌다. 둘은 밝기로만 갈라진다.
+ * 낱말도 뜻풀이도 **한 크기 한 색**으로 선다 — 크기나 색이 갈리면 한 문장이 아니라
+ * 제목과 부제로 읽힌다. 색은 이름·명함과 같은 회색이라 좌측 열 전체가 한 덩어리다.
  *
- * 15는 한 줄이 3:2 화면(정본 폭 1216)의 좌측 프레임선 안에 들어오는 최댓값이다.
+ * 12는 줄 폭이 위의 이름(32짜리 `DS Kim`, 폭 121)과 같아지는 크기다. 이름 밑에 붙는
+ * 글이니 이름보다 길면 블록이 어긋나 보이고, 이름이 들어가는 화면이면 제사도 들어간다.
  * 그보다 좁아지면 뜻풀이가 물러나고 낱말만 남는다 — 명함이 물러나는 것과 같은 문법이다.
  */
 const TAGLINE_Y = 31;
-const TAGLINE_SIZE = 15;
+const TAGLINE_SIZE = 12;
 const TAGLINE_SPACING = 2;
 const TAGLINE_GAP = 9;
 const TAGLINE_LEAD_W =
 	textWidth(PROFILE.tagline.lead, TAGLINE_SIZE) +
 	[...PROFILE.tagline.lead].length * TAGLINE_SPACING;
-const TAGLINE_GLOSS_MIN_W = needW(
-	TAGLINE_LEAD_W + TAGLINE_GAP + textWidth(PROFILE.tagline.gloss, TAGLINE_SIZE),
-	2,
-);
+const TAGLINE_W =
+	TAGLINE_LEAD_W + TAGLINE_GAP + textWidth(PROFILE.tagline.gloss, TAGLINE_SIZE);
+const TAGLINE_GLOSS_MIN_W = needW(TAGLINE_W, 2);
+
+/**
+ * 낱말의 뜻 — 손을 올렸을 때만 제사 아래에 나타난다.
+ *
+ * 크기·색·나타나는 방식은 별자리 설명(`.series-caption`)과 같은 문법이다. 늘 떠 있으면
+ * 제사가 두 줄이 되어 이름 아래가 무거워지고, 뜻은 한 번 읽으면 되는 것이라 숨겨 둔다.
+ */
+const MEANING_Y = TAGLINE_Y + 17;
+const MEANING_SIZE = 10;
+const MEANING_MIN_W = needW(textWidth(PROFILE.tagline.meaning, MEANING_SIZE), 2);
+/** 손이 닿는 자리 — 글자만이 아니라 제사 줄 전체가 받는다. */
+const EPIGRAPH_SHIELD = { y: TAGLINE_Y - 14, h: MEANING_Y + 6 - (TAGLINE_Y - 14) };
 
 /**
  * 좌측 명함의 이력 무리 — ALUMNI · CERTIFICATES.
@@ -423,16 +434,33 @@ const REFLECTIONS = [
 				>{PROFILE.name}</text
 			>
 			{/*
-			  제사 — 한 줄, 한 크기. 낱말이 밝고 뜻풀이가 회색일 뿐 글자 크기는 같다.
-			  이름(32)이 회색이라, 여기만 밝은 글자가 되어 좌측 열에서 제일 먼저 읽힌다.
-			  좁은 화면에서는 뜻풀이가 물러난다(data-min-w).
+			  제사 — 한 줄, 한 크기, 이름과 같은 회색. 좁은 화면에서는 어원이 물러나고(data-min-w),
+			  손을 올리면 뜻이 아래에 나타난다.
 			*/}
-			<text x="0" y={TAGLINE_Y} font-size={TAGLINE_SIZE} fill="#e8e6e1">
-				<tspan letter-spacing={TAGLINE_SPACING}>{PROFILE.tagline.lead}</tspan>
-				<tspan id="tagline-gloss" data-min-w={TAGLINE_GLOSS_MIN_W} dx={TAGLINE_GAP} fill="#8f8c85"
-					>{PROFILE.tagline.gloss}</tspan
-				>
-			</text>
+			<g class="epigraph">
+				<rect
+					class="card-shield"
+					x={-8}
+					y={EPIGRAPH_SHIELD.y}
+					width={TAGLINE_W + 16}
+					height={EPIGRAPH_SHIELD.h}
+				/>
+				<text x="0" y={TAGLINE_Y} font-size={TAGLINE_SIZE} fill="#8f8c85">
+					<tspan letter-spacing={TAGLINE_SPACING}>{PROFILE.tagline.lead}</tspan>
+					<tspan id="tagline-gloss" data-min-w={TAGLINE_GLOSS_MIN_W} dx={TAGLINE_GAP}
+						>{PROFILE.tagline.gloss}</tspan
+					>
+				</text>
+				<text
+					class="epigraph-meaning"
+					data-min-w={MEANING_MIN_W}
+					x="0"
+					y={MEANING_Y}
+					font-size={MEANING_SIZE}
+					fill="#8f8c85">
+					{PROFILE.tagline.meaning}
+				</text>
+			</g>
 		</g>
 
 		<g id="social">
@@ -603,18 +631,32 @@ const REFLECTIONS = [
 		pointer-events: none;
 	}
 
+	/* 점이 커서 밑에 오면 누를 수 있다는 뜻이다(main-stage.ts가 붙인다). */
+	#hoverscene.on-post {
+		cursor: pointer;
+	}
+
 	/* 좌측 열 — 명함. 제사의 뜻풀이와 ALUMNI는 옆자리가 없는 좁은 무대에서 물러난다. */
 	#sitename {
 		opacity: 0.85;
 	}
 
 	#tagline-gloss {
-		opacity: 0.8;
 		transition: opacity 0.35s ease;
 	}
 
 	#tagline-gloss.is-hidden {
 		opacity: 0;
+	}
+
+	/* 뜻은 손을 올렸을 때만 — 별자리 설명과 같은 문법이다. */
+	.epigraph-meaning {
+		opacity: 0;
+		transition: opacity 0.18s ease;
+	}
+
+	.epigraph:hover .epigraph-meaning:not(.is-hidden) {
+		opacity: 0.9;
 	}
 
 	#alumni-col {

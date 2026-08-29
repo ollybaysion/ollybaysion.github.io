@@ -4,7 +4,8 @@
  * 정본이 지어낸 앵커 목록만 카테고리 등록부로 갈아끼웠다.
  *
  * 호버 = 빛구멍과 커서를 잇는 막, 막 범위 안 글 점등.
- * 클릭 = 유사도 파도 목록(거리순), 다른 지점 클릭 = 리로드, 내리기 = 닫기.
+ * 클릭 = 점 위면 그 글로, 빈 자리면 유사도 파도 목록(거리순).
+ *        다른 지점 클릭 = 리로드, 내리기 = 닫기.
  * CLI = 데모. 명령 체계가 미확정이라 입력 확인 모달까지만 간다.
  */
 import { angleColor, nearestCategory } from "../lib/stage/palette.ts";
@@ -32,6 +33,18 @@ const R2 = 4;
 const GOO_V = 0.66;
 const GOO_H = 2.4;
 
+/** 점이 커서 쪽으로 끌려오는 거리와 그 감쇠 폭. */
+const PULL_MAX = 10;
+const PULL_SIGMA = 75;
+/**
+ * 점을 눌렀다고 볼 반경 — **그려진 자리** 기준이다.
+ *
+ * 점은 커서 쪽으로 끌려와서 원래 좌표와 화면에 보이는 자리가 다르다. 사람은 보이는 걸
+ * 겨냥하니 판정도 보이는 자리에서 해야 한다. 손가락은 커서보다 굵어 넉넉히 잡는다.
+ */
+const HIT_R = 8;
+const HIT_R_TOUCH = 16;
+
 
 interface Post {
   angle: number;
@@ -52,6 +65,28 @@ interface Row {
 
 function clamp1(n: number): number {
   return Math.max(-1, Math.min(1, n));
+}
+
+/**
+ * 커서에 끌려온 점의 자리와 원래 자리에서 잰 거리.
+ *
+ * 그리기와 클릭 판정이 같은 식을 봐야 한다 — 갈라지면 보이는 점과 눌리는 점이 어긋난다.
+ */
+function pulled(
+  post: Post,
+  cx: number,
+  cy: number,
+  op: number,
+): { x: number; y: number; dist: number } {
+  const dx = cx - post.x;
+  const dy = cy - post.y;
+  const dist = Math.max(1, Math.hypot(dx, dy));
+  const pull = Math.exp(-((dist / PULL_SIGMA) ** 2)) * PULL_MAX * op;
+  return {
+    x: post.x + (dx / dist) * pull,
+    y: post.y + (dy / dist) * pull,
+    dist,
+  };
 }
 
 function start(svg: SVGSVGElement): void {
@@ -178,9 +213,11 @@ function start(svg: SVGSVGElement): void {
       "transform",
       `translate(${left + EDGE},${view.minY + 70})`,
     );
+    // 시안의 116은 제사가 한 줄일 때의 자리다. 제사 아래에 뜻이 나타날 자리를 비워 두려고
+    // 아이콘 줄을 그만큼 내렸다 — 뜻이 떠도 아이콘을 덮지 않는다.
     social.setAttribute(
       "transform",
-      `translate(${left + EDGE},${view.minY + 116})`,
+      `translate(${left + EDGE},${view.minY + 134})`,
     );
     if (alumniCol) {
       alumniCol.setAttribute("transform", `translate(${left + EDGE},196)`);
@@ -327,6 +364,19 @@ function start(svg: SVGSVGElement): void {
       return;
     }
 
+    // 점을 누르면 그 글로 바로 간다. 빈 자리를 눌렀을 때만 목록이 올라온다.
+    const reach = e.pointerType === "touch" ? HIT_R_TOUCH : HIT_R;
+    const hit = posts
+      .map((post) => {
+        const at = pulled(post, press.x, press.y, press.op);
+        return { post, d: Math.hypot(point.x - at.x, point.y - at.y) };
+      })
+      .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug))[0];
+    if (hit && hit.d <= reach) {
+      location.href = `/blog/${hit.post.slug}/`;
+      return;
+    }
+
     openPanel(point.x, point.y);
     if (panelState.open) {
       // 이미 올라와 있으면 그 지점 기준으로 내용만 갈아끼운다.
@@ -444,10 +494,14 @@ function start(svg: SVGSVGElement): void {
     beam.setAttribute("opacity", beamOpacity.toFixed(3));
     for (const stop of beamStops) stop.setAttribute("stop-color", color);
 
+    // 눌리는 점이 커서 밑에 있으면 손 모양으로 알려준다 — 판정은 onDown과 같은 자리에서 잰다.
+    let onPost = false;
     for (const post of posts) {
-      const dx = press.x - post.x;
-      const dy = press.y - post.y;
-      const dist = Math.max(1, Math.hypot(dx, dy));
+      const at = pulled(post, press.x, press.y, press.op);
+      const dist = at.dist;
+      if (target.over && Math.hypot(target.x - at.x, target.y - at.y) <= HIT_R) {
+        onPost = true;
+      }
       let glow = Math.exp(-((dist / 90) ** 2)) * press.op;
       if (beamOn) {
         // 빔 범위 안에 든 글도 함께 점등.
@@ -461,9 +515,8 @@ function start(svg: SVGSVGElement): void {
           );
         }
       }
-      const pull = Math.exp(-((dist / 75) ** 2)) * 10 * press.op;
-      post.dot.setAttribute("cx", (post.x + (dx / dist) * pull).toFixed(1));
-      post.dot.setAttribute("cy", (post.y + (dy / dist) * pull).toFixed(1));
+      post.dot.setAttribute("cx", at.x.toFixed(1));
+      post.dot.setAttribute("cy", at.y.toFixed(1));
       post.dot.setAttribute("r", (1.6 + 3.4 * glow).toFixed(2));
       post.dot.setAttribute("opacity", Math.min(1, glow * 1.15).toFixed(2));
       post.label.setAttribute(
@@ -471,6 +524,7 @@ function start(svg: SVGSVGElement): void {
         Math.max(0, (glow - 0.4) * 1.9).toFixed(2),
       );
     }
+    svg.classList.toggle("on-post", onPost);
 
     for (const stop of haloStops) stop.setAttribute("stop-color", color);
     for (const stop of bloomStops) stop.setAttribute("stop-color", color);

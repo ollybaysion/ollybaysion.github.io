@@ -1,28 +1,29 @@
 {
-  "name": "DS Kim",
-  "tagline": {
-    "lead": "지양",
-    "gloss": "止揚 · Aufheben"
-  },
-  "description": "기술과 커피를 기록하는 블로그",
-  "social": {
-    "github": "https://github.com/ollybaysion",
-    "instagram": "https://instagram.com/itsme._ysion"
-  },
-  "alumni": [
-    {
-      "years": "2018–2024",
-      "what": "SKKU Semiconductor System Engineering"
-    },
-    {
-      "years": "2024–",
-      "what": "Samsung Electronics AX/PI Center"
-    }
-  ],
-  "certificates": [
-    {
-      "years": "2026",
-      "what": "SCA Brewing Professional"
-    }
-  ]
+	"name": "DS Kim",
+	"tagline": {
+		"lead": "지양",
+		"gloss": "止揚 · Aufheben",
+		"meaning": "버리고 · 간직하고 · 높인다"
+	},
+	"description": "기술과 커피를 기록하는 블로그",
+	"social": {
+		"github": "https://github.com/ollybaysion",
+		"instagram": "https://instagram.com/itsme._ysion"
+	},
+	"alumni": [
+		{
+			"years": "2018–2024",
+			"what": "SKKU Semiconductor System Engineering"
+		},
+		{
+			"years": "2024–",
+			"what": "Samsung Electronics AX/PI Center"
+		}
+	],
+	"certificates": [
+		{
+			"years": "2026",
+			"what": "SCA Brewing Professional"
+		}
+	]
 }
