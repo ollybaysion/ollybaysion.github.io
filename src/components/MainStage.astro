@@ -378,10 +378,15 @@ const REFLECTIONS = [
 </div>
 
 <style>
+	/*
+	  정본 700×830은 픽셀이 아니라 비율이다 — 판을 통째로 키우고 줄인다.
+	  세로가 먼저 걸리게 두어 스크롤 없이 한 화면에 들어온다(좁은 화면에서는 폭이 건다).
+	*/
 	.stage {
-		width: min(700px, 100%);
+		--board: min(100vw, calc(100dvh * 700 / 830));
+		width: var(--board);
 		margin: 0 auto;
-		padding-top: 20px;
+		padding-top: calc(var(--board) * 20 / 700);
 	}
 
 	#hoverscene {
