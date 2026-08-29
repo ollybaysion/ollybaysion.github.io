@@ -2,5 +2,6 @@
 export * from "./label.ts";
 export * from "./list.ts";
 export * from "./palette.ts";
+export * from "./post.ts";
 export * from "./reading.ts";
 export * from "./text.ts";

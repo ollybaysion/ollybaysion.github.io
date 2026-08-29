@@ -4,7 +4,7 @@
  * 두 가지 일만 한다.
  *   1. 화면 채우기 — 정본 700 좌표계를 메인과 같은 배율로 키우고, 남는 가로는 무대로 준다.
  *   2. 메인에서 들고 온 자리(`?x=&y=`) 반영 — 주요 2편을 그 자리에서 가까운 순으로 다시 뽑고,
- *      전체 목록에 "좌표 근방순" 정렬을 열어준다.
+ *      전체 목록에 "가까운 순" 정렬을 열어준다.
  *
  * 서버가 이미 최신순 한 장을 다 그려놨다. 여기서는 채워진 자리의 내용만 갈아끼운다 —
  * 자리(y)는 서버가 잡은 그대로다.
@@ -156,7 +156,7 @@ if (svg && payload) {
   const sortNear = svg.querySelector<SVGTSpanElement>("#sort-near");
 
   if (sortNewest && sortNear) {
-    // 자리를 안 들고 왔으면 근방순을 잴 기준이 없다 — 글자만 남기고 재운다.
+    // 자리를 안 들고 왔으면 가까운 순을 잴 기준이 없다 — 글자만 남기고 재운다.
     if (!focus) {
       sortNear.classList.add("inert");
     } else {
@@ -164,7 +164,7 @@ if (svg && payload) {
         sortNewest.classList.toggle("is-on", !near);
         sortNear.classList.toggle("is-on", near);
         sortNewest.textContent = near ? " 최신순" : " 최신순 ⌄";
-        sortNear.textContent = near ? " 좌표 근방순 ⌄" : " 좌표 근방순";
+        sortNear.textContent = near ? " 가까운 순 ⌄" : " 가까운 순";
         fillRows(
           near ? [...rowPool].sort(byNearest(focus)) : [...rowPool].sort(byNewest),
         );

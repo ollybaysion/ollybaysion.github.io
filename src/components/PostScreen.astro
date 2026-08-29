@@ -1,0 +1,658 @@
+---
+/**
+ * 글 화면 — 픽셀 정본 = `~/repo/blog-screens/Post.dc.html`.
+ *
+ * 세 덩어리다: 머리(빛구멍 · 카테고리 · 제목 · 이 글의 좌표) → 본문 → 꼬리(가까운 글 · 수평선 · 바다).
+ * 시리즈 글이면 본문과 꼬리 사이에 별자리 스트립이 하나 낀다.
+ *
+ * 자리·크기는 `src/lib/stage/post.ts`가 정하고, 가까운 글은 빌드 때 박힌 `neighbors.json`을 그대로 읽는다 —
+ * 화면에서 다시 계산하지 않는다.
+ */
+import categoriesData from '../data/generated/categories.json';
+import neighborsData from '../data/generated/neighbors.json';
+import postsData from '../data/generated/posts.json';
+import seriesData from '../data/generated/series.json';
+import { BAND, EDGE_L, EDGE_R, HOLE } from '../lib/stage/list.ts';
+import { angleColor, categoryDeepColor } from '../lib/stage/palette.ts';
+import {
+	HEAD,
+	MINIMAP,
+	NEIGHBORS_SHOWN,
+	STRIP,
+	minimapDot,
+	postTail,
+	stripPoints,
+	titleBaselines,
+} from '../lib/stage/post.ts';
+import { SEA_BANDS } from '../lib/stage/sea.ts';
+import { truncateText, wrapText } from '../lib/stage/text.ts';
+
+interface Props {
+	slug: string;
+}
+
+const { slug } = Astro.props;
+
+const post = postsData.posts.find((entry) => entry.slug === slug);
+if (!post) {
+	throw new Error(`좌표가 없는 글이다: "${slug}". \`npm run coords\`를 먼저 돌릴 것.`);
+}
+
+const bySlug = new Map(postsData.posts.map((entry) => [entry.slug, entry]));
+const accent = angleColor(post.angle);
+
+/** 제목 — 아래에서 쌓으므로 줄이 늘어도 메타가 제자리다. */
+const titleLines = wrapText(post.title, HEAD.title.size, EDGE_R - EDGE_L, HEAD.title.maxLines);
+const titleY = titleBaselines(titleLines.length);
+
+const episode = post.series ? post.episode : undefined;
+const meta = [
+	post.date.slice(0, 10),
+	...post.tags,
+	...(post.series && episode !== undefined ? [`${post.series} ${episode}화`] : []),
+].join(' · ');
+
+/** 가까운 글 — 빌드 때 박혀 있다. 화면에서 다시 재지 않는다. */
+const neighbors = (neighborsData.neighbors[slug] ?? [])
+	.slice(0, NEIGHBORS_SHOWN)
+	.flatMap((near) => {
+		const entry = bySlug.get(near.slug);
+		if (!entry) return [];
+		return [
+			{
+				slug: near.slug,
+				title: truncateText(entry.title, 13.5, EDGE_R - 76 - 52),
+				color: angleColor(entry.angle),
+				percent: Math.round(near.proximity * 100),
+			},
+		];
+	});
+
+const tail = postTail(neighbors.length);
+
+/** 시리즈 스트립 — 별자리를 상자에 눕히고 이 글의 회차를 밝힌다. */
+const members = post.series ? (seriesData.series[post.series] ?? []) : [];
+const strip =
+	post.series && members.length > 0
+		? (() => {
+				const nodes = members.flatMap((member) => {
+					const entry = bySlug.get(member.slug);
+					return entry ? [{ ...member, x: entry.x, y: entry.y, title: entry.title }] : [];
+				});
+				const points = stripPoints(nodes);
+				const here = nodes.findIndex((node) => node.slug === slug);
+				// 원형 평균 — 별자리가 호 경계를 넘어가도 색이 반대편으로 튀지 않는다.
+				const sum = nodes.reduce(
+					(acc, node) => {
+						const entry = bySlug.get(node.slug)!;
+						const a = (entry.angle * Math.PI) / 180;
+						return { x: acc.x + Math.cos(a), y: acc.y + Math.sin(a) };
+					},
+					{ x: 0, y: 0 },
+				);
+				return {
+					name: post.series,
+					color: angleColor((Math.atan2(sum.y, sum.x) * 180) / Math.PI),
+					points,
+					here,
+					total: nodes.length,
+					episode: nodes[here]?.episode ?? 1,
+					prev: nodes[here - 1],
+					next: nodes[here + 1],
+					href: `/series/${encodeURIComponent(post.series)}/`,
+				};
+			})()
+		: null;
+
+const category = categoriesData.categories[post.category];
+const n = (value: number) => Number(value.toFixed(2));
+const dot = minimapDot(post);
+---
+
+<article
+	class="post"
+	style={`--post-accent: ${accent};`}
+	data-head={HEAD.height}
+	data-tail={tail.height}
+>
+	<svg class="head bleed-svg" viewBox={`0 0 700 ${HEAD.height}`} data-h={HEAD.height}>
+		<defs>
+			<radialGradient id="lapP-light">
+				<stop offset="0%" stop-color="#fffdf4"></stop>
+				<stop offset="70%" stop-color="#fffdf4"></stop>
+				<stop offset="100%" stop-color="#eeddb8"></stop>
+			</radialGradient>
+			<radialGradient id="lapP-bloom">
+				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.45"></stop>
+				<stop offset="45%" stop-color="#d9a154" stop-opacity="0.158"></stop>
+				<stop offset="100%" stop-color="#d9a154" stop-opacity="0"></stop>
+			</radialGradient>
+			<radialGradient id="clothfieldP">
+				<stop offset="0%" stop-color="#cfc9bd" stop-opacity="0"></stop>
+				<stop offset="36%" stop-color="#cfc9bd" stop-opacity="0"></stop>
+				<stop offset="46%" stop-color="#cfc9bd" stop-opacity="0.13"></stop>
+				<stop offset="62%" stop-color="#cfc9bd" stop-opacity="0.08"></stop>
+				<stop offset="100%" stop-color="#cfc9bd" stop-opacity="0"></stop>
+			</radialGradient>
+			<radialGradient id="pvig" cx="0.5" cy="0.42" r="0.8">
+				<stop offset="0%" stop-color="#000000" stop-opacity="0"></stop>
+				<stop offset="68%" stop-color="#000000" stop-opacity="0"></stop>
+				<stop offset="100%" stop-color="#000000" stop-opacity="0.2"></stop>
+			</radialGradient>
+			<filter id="grainw">
+				<feTurbulence
+					type="fractalNoise"
+					baseFrequency="0.8"
+					numOctaves="2"
+					seed="7"
+					stitchTiles="stitch"></feTurbulence>
+				<feColorMatrix
+					type="matrix"
+					values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.6 0.6 0.6 0 0"></feColorMatrix>
+			</filter>
+			<filter id="punch" x="-15%" y="-15%" width="130%" height="130%">
+				<feTurbulence
+					type="fractalNoise"
+					baseFrequency="0.045"
+					numOctaves="3"
+					seed="4"
+					result="pn"></feTurbulence>
+				<feDisplacementMap in="SourceGraphic" in2="pn" scale="6"></feDisplacementMap>
+			</filter>
+			<filter id="soften" x="-20%" y="-20%" width="140%" height="140%">
+				<feGaussianBlur stdDeviation="3"></feGaussianBlur>
+			</filter>
+		</defs>
+
+		<circle cx={HOLE.cx} cy={HOLE.cy} r="150" fill="url(#clothfieldP)"></circle>
+		<circle cx={HOLE.cx} cy={HOLE.cy} r="200" fill="url(#lapP-bloom)"></circle>
+		<circle cx={HOLE.cx} cy={HOLE.cy} r={HOLE.r} fill="url(#lapP-light)" filter="url(#punch)"
+		></circle>
+		<circle cx={HOLE.cx} cy={HOLE.cy} r="48" fill="#ffffff" opacity="0.55" filter="url(#soften)"
+		></circle>
+
+		<a href={`/list/${encodeURIComponent(post.category)}/`}>
+			<rect class="hit" x="12" y="18" width="72" height="24"></rect>
+			<text x={HEAD.back.x} y={HEAD.back.y} font-size="11.5" fill="#8f8c85" opacity="0.85"
+				>← 목록</text
+			>
+		</a>
+
+		<text
+			class="serif"
+			x={HEAD.category.x}
+			y={HEAD.category.y}
+			text-anchor="middle"
+			font-size={HEAD.category.size}
+			font-weight="700"
+			fill={categoryDeepColor(post.category)}>{post.category}</text
+		>
+
+		{/* 이 글의 좌표 — 윤곽이 가장 바깥 나이테, 점이 이 글이다. */}
+		<g opacity="0.9">
+			<circle
+				cx={MINIMAP.cx}
+				cy={MINIMAP.cy}
+				r={MINIMAP.r}
+				fill="none"
+				stroke="#2a2a2e"
+				stroke-width="1"></circle>
+			<circle cx={n(dot.x)} cy={n(dot.y)} r={MINIMAP.dot} fill={accent}></circle>
+			<text
+				x={MINIMAP.cx}
+				y={MINIMAP.captionY}
+				text-anchor="middle"
+				font-size={MINIMAP.captionSize}
+				fill="#8f8c85">이 글의 좌표</text
+			>
+		</g>
+
+		<text class="serif" x={EDGE_L} font-size={HEAD.title.size} font-weight="700" fill="#e8e6e1">
+			{titleLines.map((line, i) => <tspan x={EDGE_L} y={titleY[i]!}>{line}</tspan>)}
+		</text>
+		<text class="mono" x={EDGE_L} y={HEAD.meta} font-size="11" fill="#8f8c85">{meta}</text>
+
+		<rect class="bleed-cover" x="0" y="0" width="700" height={HEAD.height} fill="url(#pvig)"></rect>
+		<rect
+			class="bleed-cover"
+			x="0"
+			y="0"
+			width="700"
+			height={HEAD.height}
+			filter="url(#grainw)"
+			opacity="0.05"></rect>
+		<line
+			class="bleed-band"
+			data-at={BAND[0]}
+			x1={BAND[0]}
+			y1="0"
+			x2={BAND[0]}
+			y2={HEAD.height}
+			stroke="#ffffff"
+			stroke-width="0.6"
+			opacity="0.03"></line>
+		<line
+			class="bleed-band"
+			data-at={BAND[1]}
+			x1={BAND[1]}
+			y1="0"
+			x2={BAND[1]}
+			y2={HEAD.height}
+			stroke="#ffffff"
+			stroke-width="0.9"
+			opacity="0.042"></line>
+	</svg>
+
+	<div class="body"><slot /></div>
+
+	{
+		strip && (
+			<div class="strip-wrap">
+				<a class="strip" href={strip.href} style={`--strip-color: ${strip.color};`}>
+					<svg width={STRIP.w} height={STRIP.h} viewBox={`0 0 ${STRIP.w} ${STRIP.h}`}>
+						<path
+							d={`M${strip.points.map((p) => `${n(p.x)},${n(p.y)}`).join(' L')}`}
+							stroke={strip.color}
+							stroke-width="1"
+							fill="none"
+							opacity="0.5"
+						/>
+						{strip.points.map((p, i) => (
+							<circle
+								cx={n(p.x)}
+								cy={n(p.y)}
+								r={i === strip.here ? 3 : 2}
+								fill={strip.color}
+								opacity={i === strip.here ? 1 : 0.45}
+							/>
+						))}
+					</svg>
+					<div class="strip-text">
+						<div class="strip-name">{`${strip.name} · ${strip.episode}/${strip.total}`}</div>
+						<div class="strip-nav">
+							<span>
+								{strip.prev
+									? `← ${strip.prev.episode}화 ${strip.prev.title}`
+									: '이 글이 첫 화'}
+							</span>
+							<span class="strip-sep">·</span>
+							<span>
+								{strip.next
+									? `${strip.next.episode}화 ${strip.next.title} →`
+									: '이 글이 마지막 화'}
+							</span>
+						</div>
+					</div>
+				</a>
+			</div>
+		)
+	}
+
+	<svg class="tail bleed-svg" viewBox={`0 0 700 ${tail.height}`} data-h={tail.height}>
+		<defs>
+			<radialGradient id="bvigP" cx="0.5" cy="0.42" r="0.8">
+				<stop offset="0%" stop-color="#000000" stop-opacity="0"></stop>
+				<stop offset="68%" stop-color="#000000" stop-opacity="0"></stop>
+				<stop offset="100%" stop-color="#000000" stop-opacity="0.3"></stop>
+			</radialGradient>
+			<clipPath id="seaclipP">
+				<rect id="seaclipP-rect" x="0" y="590" width="700" height="200"></rect>
+			</clipPath>
+		</defs>
+
+		{
+			neighbors.length > 0 && (
+				<>
+					<text
+						x={EDGE_L}
+						y={tail.label}
+						font-size="10.5"
+						letter-spacing="3"
+						fill="#8f8c85"
+					>
+						가까운 글
+					</text>
+					<text
+						x={EDGE_R}
+						y={tail.label}
+						text-anchor="end"
+						font-size="10.5"
+						fill="#8f8c85"
+						opacity="0.8"
+					>
+						이 글의 좌표 기준 · 빌드 때 고정
+					</text>
+				</>
+			)
+		}
+		{
+			neighbors.map((near, i) => (
+				<a href={`/blog/${near.slug}/`}>
+					<rect
+						class="hit"
+						x={EDGE_L}
+						y={tail.rows[i]!.dot - 15}
+						width={EDGE_R - EDGE_L}
+						height="30"
+					/>
+					<circle cx="56" cy={tail.rows[i]!.dot} r="3" fill={near.color} />
+					<text x="76" y={tail.rows[i]!.title} font-size="13.5" fill="#d8d5cd">
+						{near.title}
+					</text>
+					<text
+						class="mono"
+						x={EDGE_R}
+						y={tail.rows[i]!.title}
+						text-anchor="end"
+						font-size="11"
+						fill="#8f8c85"
+					>
+						{`${near.percent}%`}
+					</text>
+				</a>
+			))
+		}
+
+		<line
+			class="bleed"
+			x1="0"
+			x2="700"
+			y1={tail.horizon}
+			y2={tail.horizon}
+			stroke="#2a2a2e"
+			stroke-width="1.5"
+			opacity="0.55"></line>
+
+		<g transform={`translate(0,${tail.seaShift})`}>
+			<g clip-path="url(#seaclipP)" opacity="0.3">
+				<g id="seaP" transform="translate(0,457) scale(0.7)">
+					{SEA_BANDS.map((band) => <path d={band.d} fill={band.fill} />)}
+				</g>
+			</g>
+			{/* 카라멜 반사 막대 — 수평선 아래로 흘러내리는 빛. */}
+			<rect class="refl" x="305" y="625" width="90" height="3" rx="1.5" fill="#d9a154" opacity="0.75"
+			></rect>
+			<rect class="refl" x="322" y="642" width="56" height="3" rx="1.5" fill="#d9a154" opacity="0.6"
+			></rect>
+			<rect class="refl" x="295" y="662" width="110" height="3" rx="1.5" fill="#d9a154" opacity="0.5"
+			></rect>
+			<rect class="refl" x="320" y="684" width="60" height="3" rx="1.5" fill="#d9a154" opacity="0.42"
+			></rect>
+			<rect class="refl" x="308" y="710" width="84" height="3" rx="1.5" fill="#d9a154" opacity="0.34"
+			></rect>
+			<rect class="refl" x="328" y="737" width="44" height="3" rx="1.5" fill="#d9a154" opacity="0.26"
+			></rect>
+			<rect class="refl" x="318" y="767" width="64" height="3" rx="1.5" fill="#d9a154" opacity="0.18"
+			></rect>
+		</g>
+
+		<rect class="bleed-cover" x="0" y="0" width="700" height={tail.height} fill="url(#bvigP)"></rect>
+		<rect
+			class="bleed-cover"
+			x="0"
+			y="0"
+			width="700"
+			height={tail.height}
+			filter="url(#grainw)"
+			opacity="0.05"></rect>
+		<line
+			class="bleed-band"
+			data-at={BAND[0]}
+			x1={BAND[0]}
+			y1="0"
+			x2={BAND[0]}
+			y2={tail.height}
+			stroke="#ffffff"
+			stroke-width="0.6"
+			opacity="0.04"></line>
+		<line
+			class="bleed-band"
+			data-at={BAND[1]}
+			x1={BAND[1]}
+			y1="0"
+			x2={BAND[1]}
+			y2={tail.height}
+			stroke="#ffffff"
+			stroke-width="0.9"
+			opacity="0.056"></line>
+	</svg>
+
+	<nav class="post-index" aria-label="이 글의 자리">
+		<a href={`/list/${encodeURIComponent(post.category)}/`}>{post.category} 목록 ({category?.count ?? 0}편)</a>
+	</nav>
+</article>
+
+<style>
+	/*
+	  글 화면도 메인·목록과 같은 배율(min(폭/700, 높이/790))로 큰다.
+	  머리·꼬리는 SVG라 viewBox를 벌려 화면 끝까지 가고, 본문은 그냥 글이라
+	  기둥(700) 그대로 두고 article 통째로 zoom을 먹인다 — 둘이 같은 배율이라 줄이 맞는다.
+	  실제 폭·배율은 post-screen.ts의 layout()이 잡는다.
+	*/
+	.post {
+		width: 700px;
+		margin: 0 auto;
+	}
+
+	.bleed-svg {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+
+	.bleed-svg text {
+		font-family: var(--stage-sans);
+	}
+
+	.bleed-svg .serif {
+		font-family: var(--stage-serif);
+	}
+
+	.bleed-svg .mono {
+		font-family: var(--stage-mono);
+	}
+
+	/* 글자 위에서만 눌리면 답답하다 — 줄 전체가 링크가 되게 투명한 판을 깐다. */
+	.hit {
+		fill: #ffffff;
+		fill-opacity: 0;
+		pointer-events: all;
+	}
+
+	/* 비네트·그레인·프레임선은 장식이다 — 클릭은 그 아래 링크가 받는다. */
+	.bleed-cover,
+	.bleed-band,
+	.bleed {
+		pointer-events: none;
+	}
+
+	.bleed-svg a text {
+		transition: fill 0.18s ease;
+	}
+
+	.bleed-svg a:hover text,
+	.bleed-svg a:focus-visible text {
+		fill: #ffffff;
+	}
+
+	/* 본문 — 정본의 15px / 1.9. article이 화면만큼 넓어져도 글줄은 700 기둥에 남는다. */
+	.body {
+		box-sizing: border-box;
+		width: 700px;
+		margin: 0 auto;
+		padding: 8px 52px 20px 52px;
+		font-family: var(--stage-sans);
+		font-size: 15px;
+		line-height: 1.9;
+		color: var(--stage-ink-dim);
+	}
+
+	.body :global(p) {
+		margin: 0 0 26px 0;
+	}
+
+	.body :global(h2) {
+		margin: 34px 0 16px 0;
+		font-family: var(--stage-serif);
+		font-size: 19px;
+		font-weight: 600;
+		color: var(--stage-ink);
+	}
+
+	.body :global(h3) {
+		margin: 28px 0 12px 0;
+		font-family: var(--stage-serif);
+		font-size: 16px;
+		font-weight: 600;
+		color: var(--stage-ink);
+	}
+
+	.body :global(blockquote) {
+		margin: 0 0 26px 0;
+		padding: 4px 0 4px 20px;
+		border-left: 2px solid var(--post-accent);
+		color: var(--stage-muted);
+	}
+
+	.body :global(ul),
+	.body :global(ol) {
+		margin: 0 0 26px 0;
+		padding-left: 22px;
+	}
+
+	.body :global(li) {
+		margin: 0 0 6px 0;
+	}
+
+	.body :global(a) {
+		color: var(--post-accent);
+		border-bottom: 1px solid color-mix(in srgb, var(--post-accent) 40%, transparent);
+	}
+
+	.body :global(img) {
+		display: block;
+		width: 100%;
+		height: auto;
+		border: 1px solid #26262b;
+		border-radius: 4px;
+	}
+
+	/*
+	  정본엔 코드가 없다. 카테고리에 "개발"이 있는 이상 필요해서 같은 팔레트로 지었다.
+	*/
+	.body :global(:not(pre) > code) {
+		padding: 1px 5px;
+		border-radius: 3px;
+		background: #1c1c21;
+		font-family: var(--stage-mono);
+		font-size: 0.88em;
+	}
+
+	.body :global(pre) {
+		margin: 0 0 26px 0;
+		padding: 14px 18px;
+		overflow-x: auto;
+		border: 1px solid #26262b;
+		border-radius: 4px;
+		background: #17171b;
+		font-size: 13px;
+		line-height: 1.7;
+	}
+
+	.body :global(pre code) {
+		font-family: var(--stage-mono);
+	}
+
+	.body :global(hr) {
+		margin: 34px 0;
+		border: 0;
+		border-top: 1px solid var(--stage-rule);
+	}
+
+	.body :global(table) {
+		width: 100%;
+		margin: 0 0 26px 0;
+		border-collapse: collapse;
+		font-size: 13.5px;
+	}
+
+	.body :global(th),
+	.body :global(td) {
+		padding: 8px 10px;
+		border-bottom: 1px solid var(--stage-rule);
+		text-align: left;
+	}
+
+	/* 시리즈 스트립 — 별자리 미니맵 + 회차 + 이전·다음. */
+	.strip-wrap {
+		box-sizing: border-box;
+		width: 700px;
+		margin: 0 auto;
+		padding: 0 52px 34px 52px;
+	}
+
+	.strip {
+		display: flex;
+		gap: 18px;
+		align-items: center;
+		padding: 14px 20px;
+		border: 1px solid #26262b;
+		border-radius: 4px;
+		transition: border-color 0.18s ease;
+	}
+
+	.strip:hover,
+	.strip:focus-visible {
+		border-color: var(--strip-color);
+	}
+
+	.strip svg {
+		display: block;
+		flex: none;
+	}
+
+	.strip-text {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+	}
+
+	.strip-name {
+		font-family: var(--stage-serif);
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--strip-color);
+	}
+
+	.strip-nav {
+		font-size: 12px;
+		color: var(--stage-muted);
+	}
+
+	.strip-sep {
+		padding: 0 6px;
+	}
+
+	/* 화면에는 없지만 키보드와 크롤러에는 있는 통로. */
+	.post-index {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bleed-svg a text,
+		.strip {
+			transition: none;
+		}
+	}
+</style>
+
+<script>
+	import '../scripts/post-screen.ts';
+</script>

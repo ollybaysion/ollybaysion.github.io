@@ -31,7 +31,7 @@ export function byDateThenSlug(a: PlacedEntry, b: PlacedEntry): number {
 }
 
 /**
- * 한 글의 근방 — 화면 거리순 상위 N편.
+ * 한 글에서 가까운 글 — 화면 거리순 상위 N편.
  * 거리가 같으면 슬러그로 갈라서 빌드마다 순서가 바뀌지 않게 한다.
  */
 export function neighborsOf(
@@ -50,7 +50,7 @@ export function neighborsOf(
 		.slice(0, limit);
 }
 
-/** 모든 글의 근방을 한 번에. */
+/** 모든 글에 대해 한 번에. */
 export function neighborMap(
 	all: readonly PlacedEntry[],
 	limit: number = NEIGHBOR_LIMIT,
