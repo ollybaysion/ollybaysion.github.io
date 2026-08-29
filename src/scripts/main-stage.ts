@@ -9,8 +9,11 @@
  */
 import { angleColor, nearestCategory } from "../lib/stage/palette.ts";
 
+/** 정본 좌표계. 세로는 이 값을 그대로 쓰고, 가로만 화면 비율에 맞춰 벌어진다. */
 const VIEW_W = 700;
 const VIEW_H = 790;
+/** 정본의 좌우 여백. 파도 패널 글자가 이만큼 띄고 앉는다. */
+const EDGE = 52;
 /** 빛구멍 중심. 좌표 엔진의 CENTER와 같은 값이다. */
 const CX = 350;
 const CY = 235;
@@ -113,6 +116,78 @@ function start(svg: SVGSVGElement): void {
     }),
   );
 
+  // 화면 비율만큼 좌우로 벌어진 무대. layout()이 갱신한다.
+  const view = { minX: 0, minY: 0, w: VIEW_W, h: VIEW_H };
+
+  const bleeds = [...svg.querySelectorAll<SVGLineElement>(".bleed")];
+  const covers = [...svg.querySelectorAll<SVGRectElement>(".cover")];
+  const bands = [...svg.querySelectorAll<SVGLineElement>(".band")];
+  const edgeLeft = [...svg.querySelectorAll<SVGElement>(".edge-l")];
+  const edgeRight = [...svg.querySelectorAll<SVGElement>(".edge-r")];
+  const edgeDots = [...svg.querySelectorAll<SVGCircleElement>(".edge-dot")];
+  const edgeTitles = [...svg.querySelectorAll<SVGTextElement>(".edge-title")];
+  const sea = svg.querySelector<SVGGElement>("#sea")!;
+  const seaClip = svg.querySelector<SVGRectElement>("#seaclip-rect")!;
+  const seaFloor = svg.querySelector<SVGRectElement>("#sea-floor")!;
+
+  /**
+   * 무대를 뷰포트에 맞춘다.
+   * 가로가 넉넉하면 좌우로 벌리고(세로 좌표계는 정본 그대로), 세로로 긴 화면에서는
+   * 폭을 700에 묶고 위아래로 벌려 장면을 가운데 놓는다. 어느 쪽이든 원은 원으로 남는다.
+   */
+  function layout(): void {
+    const box = svg.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return;
+    const aspect = box.width / box.height;
+    const w = Math.max(VIEW_W, VIEW_H * aspect);
+    const h = w / aspect;
+    view.w = w;
+    view.h = h;
+    view.minX = VIEW_W / 2 - w / 2;
+    view.minY = (VIEW_H - h) / 2;
+    svg.setAttribute("viewBox", `${view.minX} ${view.minY} ${w} ${h}`);
+
+    const left = view.minX;
+    const right = view.minX + w;
+    for (const line of bleeds) {
+      line.setAttribute("x1", String(left));
+      line.setAttribute("x2", String(right));
+    }
+    for (const rect of covers) {
+      rect.setAttribute("x", String(left));
+      rect.setAttribute("y", String(view.minY));
+      rect.setAttribute("width", String(w));
+      rect.setAttribute("height", String(h));
+    }
+    // 필름 프레임 세로선 — 정본의 폭 대비 위치(17% · 87%)를 유지한다.
+    for (const band of bands) {
+      const x = left + (w * Number(band.dataset.at)) / VIEW_W;
+      band.setAttribute("x1", String(x));
+      band.setAttribute("x2", String(x));
+      band.setAttribute("y1", String(view.minY));
+      band.setAttribute("y2", String(view.minY + h));
+    }
+    // 바다는 1000단위 폭이라 가로로 늘려 화면 끝까지 채운다.
+    sea.setAttribute(
+      "transform",
+      `translate(${left},457) scale(${w / 1000},0.7)`,
+    );
+    seaClip.setAttribute("x", String(left));
+    seaClip.setAttribute("width", String(w));
+    seaClip.setAttribute("height", String(Math.max(200, view.minY + h - 590)));
+    // 바다 그림의 마지막 밴드는 y≈966에서 끝난다. 그 아래를 같은 색으로 메운다(살짝 겹쳐 이음매를 지운다).
+    seaFloor.setAttribute("x", String(left));
+    seaFloor.setAttribute("width", String(w));
+    seaFloor.setAttribute("height", String(Math.max(0, view.minY + h - 960)));
+
+    for (const node of edgeLeft) node.setAttribute("x", String(left + EDGE));
+    for (const node of edgeRight) node.setAttribute("x", String(right - EDGE));
+    for (const node of edgeDots)
+      node.setAttribute("cx", String(left + EDGE + 4));
+    for (const node of edgeTitles)
+      node.setAttribute("x", String(left + EDGE + 24));
+  }
+
   const press = { x: 350, y: 115, op: 0 };
   const target = { x: 350, y: 115, over: false };
   const panelState = { y: 290, op: 0, open: false, t: 0, pulse: 0 };
@@ -122,7 +197,7 @@ function start(svg: SVGSVGElement): void {
   let command = "";
   let raf = 0;
 
-  /** 화면 좌표 → viewBox 좌표. 보드가 줄어들어도 계산은 700×790 위에서 한다. */
+  /** 화면 좌표 → 무대 좌표. 무대가 벌어져도 정본 좌표계 위에서 계산한다. */
   function toStage(e: {
     clientX: number;
     clientY: number;
@@ -136,8 +211,8 @@ function start(svg: SVGSVGElement): void {
       e.clientY <= b.bottom;
     if (!inside) return null;
     return {
-      x: ((e.clientX - b.left) * VIEW_W) / b.width,
-      y: ((e.clientY - b.top) * VIEW_H) / b.height,
+      x: view.minX + ((e.clientX - b.left) * view.w) / b.width,
+      y: view.minY + ((e.clientY - b.top) * view.h) / b.height,
     };
   }
 
@@ -220,7 +295,8 @@ function start(svg: SVGSVGElement): void {
       const panelTop = PANEL_TOP + panelState.y;
       if (point.y > panelTop) {
         // 패널 안 — 우상단은 내리기, 나머지 행은 링크가 직접 받는다.
-        if (point.x > 560 && point.y < panelTop + 62) panelState.open = false;
+        if (point.x > view.minX + view.w - 140 && point.y < panelTop + 62)
+          panelState.open = false;
         return;
       }
       // 원 구역 클릭만 리로드 — CLI·그 아래는 무시.
@@ -405,7 +481,9 @@ function start(svg: SVGSVGElement): void {
     const A = 12;
     const L = 260;
     const pts: string[] = [];
-    for (let wx = 0; wx <= VIEW_W; wx += 14) {
+    const waveFrom = Math.floor(view.minX / 14) * 14;
+    const waveTo = view.minX + view.w + 14;
+    for (let wx = waveFrom; wx <= waveTo; wx += 14) {
       const drift =
         0.5 * Math.sin((2 * Math.PI * wx) / (L * 2.7) + phase * 1.7);
       const th = (2 * Math.PI * wx) / L + phase + drift;
@@ -416,7 +494,11 @@ function start(svg: SVGSVGElement): void {
       pts.push(`${wx},${(WAVE_Y - A * (crest + chop)).toFixed(1)}`);
     }
     const edge = `M${pts.join(" L")}`;
-    waveFill.setAttribute("d", `${edge} L${VIEW_W},${VIEW_H} L0,${VIEW_H} Z`);
+    const floor = view.minY + view.h;
+    waveFill.setAttribute(
+      "d",
+      `${edge} L${waveTo},${floor} L${waveFrom},${floor} Z`,
+    );
     waveLine.setAttribute("d", edge);
     panel.setAttribute("transform", `translate(0,${py.toFixed(1)})`);
     panel.setAttribute("opacity", ps.op.toFixed(3));
@@ -437,7 +519,7 @@ function start(svg: SVGSVGElement): void {
     } catch {
       width2 = command.length * 8;
     }
-    cliCaret.setAttribute("x", (74 + width2 + 2).toFixed(1));
+    cliCaret.setAttribute("x", (view.minX + EDGE + 24 + width2 + 2).toFixed(1));
     const nearCli =
       target.over && target.y > CLI_TOP - 14 && target.y < CLI_BOTTOM + 14;
     cliCaret.setAttribute(
@@ -467,6 +549,10 @@ function start(svg: SVGSVGElement): void {
     }
   }
 
+  layout();
+  if (typeof ResizeObserver === "function")
+    new ResizeObserver(layout).observe(svg);
+  window.addEventListener("resize", layout);
   document.addEventListener("pointermove", onMove);
   document.addEventListener("pointerleave", onLeave);
   document.addEventListener("pointerdown", onDown);

@@ -31,3 +31,12 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/*
+  무대 화면(메인)은 뷰포트를 통째로 쓴다. 정본의 세로 좌표계는 그대로 두고
+  viewBox를 화면 비율만큼 좌우로 벌리는 식이라 스크롤이 생기지 않는다.
+*/
+body.stage-page {
+  height: 100dvh;
+  overflow: hidden;
+}

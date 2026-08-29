@@ -140,7 +140,7 @@ const REFLECTIONS = [
 			<filter id="beamblur" x="-40%" y="-40%" width="180%" height="180%">
 				<feGaussianBlur stdDeviation="5"></feGaussianBlur>
 			</filter>
-			<clipPath id="seaclip"><rect x="0" y="590" width="700" height="200"></rect></clipPath>
+			<clipPath id="seaclip"><rect id="seaclip-rect" x="0" y="590" width="700" height="200"></rect></clipPath>
 		</defs>
 
 		<circle cx="350" cy="235" r="210" fill="url(#clothfield)"></circle>
@@ -183,9 +183,9 @@ const REFLECTIONS = [
 			>ALUMNI</text
 		>
 
-		<line x1="0" y1="590" x2="700" y2="590" stroke="#2a2a2e" stroke-width="1.5" opacity="0.55"></line>
+		<line class="bleed" y1="590" y2="590" stroke="#2a2a2e" stroke-width="1.5" opacity="0.55"></line>
 		<g clip-path="url(#seaclip)" opacity="0.3">
-			<g transform="translate(0,457) scale(0.7)">
+			<g id="sea" transform="translate(0,457) scale(0.7)">
 				<path
 					d="M 0.00,0.00 L 1000.00,0.00 L 1000.00,284.56 C 949.75,282.94 775.54,281.62 698.49,274.82 C 621.44,268.01 583.75,251.37 537.69,243.73 C 491.62,236.09 447.24,231.26 422.11,229.00 C 396.98,226.74 417.09,225.99 386.93,230.17 C 356.78,234.35 288.11,240.38 241.21,254.09 C 194.30,267.79 145.73,297.17 105.53,312.40 C 65.33,327.64 17.59,339.99 0.00,345.51 Z"
 					fill="#262626"></path>
@@ -208,6 +208,8 @@ const REFLECTIONS = [
 					d="M 0.00,387.24 C 28.48,389.73 121.44,399.16 170.85,402.22 C 220.27,405.27 268.84,403.90 296.48,405.56 C 324.12,407.22 313.23,410.24 336.68,412.19 C 360.13,414.13 402.85,413.39 437.19,417.24 C 471.52,421.09 494.97,428.66 542.71,435.27 C 590.45,441.88 671.69,454.78 723.62,456.88 C 775.54,458.98 808.21,453.51 854.27,447.88 C 900.34,442.25 975.71,427.24 1000.00,423.11 L 1000.00,727.00 L 0.00,727.00 Z"
 					fill="#e4e4e4"></path>
 			</g>
+			{/* 세로로 긴 화면에서 바다가 끊기지 않게, 마지막 밴드 색으로 바닥까지 잇는다. */}
+			<rect id="sea-floor" y="960" fill="#e4e4e4"></rect>
 		</g>
 
 		{
@@ -280,11 +282,11 @@ const REFLECTIONS = [
 		}
 
 		<g id="cli">
-			<line x1="0" y1="470" x2="700" y2="470" stroke="#e8e6e1" stroke-width="1.8" opacity="0.6"></line>
-			<line x1="0" y1="514" x2="700" y2="514" stroke="#e8e6e1" stroke-width="1.8" opacity="0.6"></line>
-			<text x="52" y="497" class="mono" font-size="13" fill="#e8e6e1">❯</text>
-			<text id="cli-text" x="74" y="497" class="mono" font-size="13" fill="#e8e6e1"></text>
-			<rect id="cli-caret" x="74" y="484" width="7" height="16" fill="#e8e6e1" opacity="0"></rect>
+			<line class="bleed" y1="470" y2="470" stroke="#e8e6e1" stroke-width="1.8" opacity="0.6"></line>
+			<line class="bleed" y1="514" y2="514" stroke="#e8e6e1" stroke-width="1.8" opacity="0.6"></line>
+			<text class="mono edge-l" x="52" y="497" font-size="13" fill="#e8e6e1">❯</text>
+			<text id="cli-text" class="mono edge-title" x="76" y="497" font-size="13" fill="#e8e6e1"></text>
+			<rect id="cli-caret" x="76" y="484" width="7" height="16" fill="#e8e6e1" opacity="0"></rect>
 		</g>
 
 		<g id="panel" opacity="0" transform="translate(0,290)">
@@ -297,27 +299,37 @@ const REFLECTIONS = [
 				stroke-width="1.3"
 				opacity="0.35"
 				stroke-linejoin="round"></path>
-			<text id="p-name" x="52" y="568" font-size="15" font-weight="600" fill="#e8e6e1"></text>
-			<text id="p-close" x="648" y="568" text-anchor="end" font-size="11.5" fill="#8f8c85">내리기 ↓</text>
+			<text id="p-name" class="edge-l" x="52" y="568" font-size="15" font-weight="600" fill="#e8e6e1"></text>
+			<text id="p-close" class="edge-r" x="648" y="568" text-anchor="end" font-size="11.5" fill="#8f8c85"
+				>내리기 ↓</text
+			>
 			{
 				PANEL_ROWS.map((y) => (
 					<a class="prow" aria-hidden="true" tabindex="-1">
-						<circle cx="56" cy={y} r="3" fill="#8f8c85" opacity="0" />
-						<text class="pt" x="76" y={y + 4} font-size="13.5" fill="#d8d5cd" opacity="0" />
-						<text class="pd" x="648" y={y + 4} text-anchor="end" font-size="11" fill="#8f8c85" opacity="0" />
+						<circle class="edge-dot" cx="56" cy={y} r="3" fill="#8f8c85" opacity="0" />
+						<text class="pt edge-title" x="76" y={y + 4} font-size="13.5" fill="#d8d5cd" opacity="0" />
+						<text
+							class="pd edge-r"
+							x="648"
+							y={y + 4}
+							text-anchor="end"
+							font-size="11"
+							fill="#8f8c85"
+							opacity="0"
+						/>
 					</a>
 				))
 			}
 			<a id="p-more" aria-hidden="true" tabindex="-1">
-				<text x="52" y="762" font-size="11.5" fill="#8f8c85" opacity="0.8"></text>
+				<text class="edge-l" x="52" y="762" font-size="11.5" fill="#8f8c85" opacity="0.8"></text>
 			</a>
-			<text x="648" y="762" text-anchor="end" font-size="10.5" fill="#8f8c85" opacity="0.8"
+			<text class="edge-r" x="648" y="762" text-anchor="end" font-size="10.5" fill="#8f8c85" opacity="0.8"
 				>유사한 순 — 클릭 지점과 글 좌표의 거리</text
 			>
 		</g>
 
 		<g id="modal" opacity="0">
-			<rect x="0" y="0" width="700" height="790" fill="#000000" opacity="0.5"></rect>
+			<rect class="cover" fill="#000000" opacity="0.5"></rect>
 			<rect
 				x="140"
 				y="328"
@@ -332,23 +344,18 @@ const REFLECTIONS = [
 			<text x="170" y="440" font-size="11" fill="#8f8c85" opacity="0.7">아무 곳이나 클릭해 닫기</text>
 		</g>
 
-		<rect x="0" y="0" width="700" height="790" fill="url(#hvig)" pointer-events="none"></rect>
-		<rect x="0" y="0" width="700" height="790" filter="url(#grainw)" opacity="0.05" pointer-events="none"
-		></rect>
+		<rect class="cover" fill="url(#hvig)" pointer-events="none"></rect>
+		<rect class="cover" filter="url(#grainw)" opacity="0.05" pointer-events="none"></rect>
 		<line
-			x1="118"
-			y1="0"
-			x2="118"
-			y2="790"
+			class="band"
+			data-at="118"
 			stroke="#ffffff"
 			stroke-width="0.6"
 			opacity="0.04"
 			pointer-events="none"></line>
 		<line
-			x1="606"
-			y1="0"
-			x2="606"
-			y2="790"
+			class="band"
+			data-at="606"
 			stroke="#ffffff"
 			stroke-width="0.9"
 			opacity="0.056"
@@ -379,20 +386,20 @@ const REFLECTIONS = [
 
 <style>
 	/*
-	  정본 700×830은 픽셀이 아니라 비율이다 — 판을 통째로 키우고 줄인다.
-	  세로가 먼저 걸리게 두어 스크롤 없이 한 화면에 들어온다(좁은 화면에서는 폭이 건다).
+	  무대는 화면 전체다. 정본의 세로 좌표계(빛구멍 235 · CLI 470 · 수평선 590 · 바다)는
+	  그대로 두고, viewBox를 화면 비율만큼 좌우로 벌린다 — 원은 원으로 남고
+	  가로로 뻗는 것들(CLI 줄·수평선·바다·파도 패널·비네트)만 화면 끝까지 간다.
+	  실제 viewBox와 가로 요소의 폭은 main-stage.ts의 layout()이 잡는다.
 	*/
 	.stage {
-		--board: min(100vw, calc(100dvh * 700 / 830));
-		width: var(--board);
-		margin: 0 auto;
-		padding-top: calc(var(--board) * 20 / 700);
+		width: 100vw;
+		height: 100dvh;
 	}
 
 	#hoverscene {
 		display: block;
 		width: 100%;
-		height: auto;
+		height: 100%;
 		touch-action: manipulation;
 	}
 
