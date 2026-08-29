@@ -15,12 +15,11 @@ import { PROFILE } from '../config/profile.ts';
 import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
 import { meanAngle } from '../lib/coords/arc.ts';
-import { CENTER, RADIUS_MAX } from '../lib/coords/constants.ts';
 import { labelPlacement } from '../lib/stage/label.ts';
 import { EDGE_L as EDGE } from '../lib/stage/list.ts';
 import { angleColor } from '../lib/stage/palette.ts';
 import { SEA_BANDS } from '../lib/stage/sea.ts';
-import { textWidth } from '../lib/stage/text.ts';
+import { textWidth, wrapText } from '../lib/stage/text.ts';
 
 const posts = postsData.posts.map((post) => ({
 	...post,
@@ -53,42 +52,89 @@ const constellations = Object.entries(seriesData.series).flatMap(([name, members
 	];
 });
 
+/** 정본 좌표계 폭. 필름 프레임선 자리가 이 단위로 적힌다. */
+const VIEW_W = 700;
+/** 필름 프레임 세로선 — 정본 폭의 118 · 606 자리(아래 <line data-at>와 같은 값). */
+const BAND_L = 118;
+const BAND_R = 606;
+
 /**
  * ALUMNI 글자 크기 — 시안(11.5/10.5)보다 한 단계 작다.
  *
  * 명함은 읽는 것이지 보는 것이 아니다. 시안의 크기는 짧은 자리표시자 기준이라
  * 진짜 약력이 들어가자 열이 너무 길어져 왼쪽 프레임선을 넘어 장면 쪽으로 뻗었다.
- * 글자를 줄이면 열이 47단위 좁아지고, 그만큼 무대와의 사이가 벌어진다.
  */
 const ALUMNI_SIZE = 10;
-const ALUMNI_YEAR_SIZE = 9;
+const ALUMNI_YEAR_SIZE = 8.5;
 const ALUMNI_LABEL_SIZE = 10;
 const ALUMNI_LABEL_SPACING = 2.6;
-/** ALUMNI 줄 간격(시안: 32 · 58 · 84 = 26칸). 글자가 작아진 만큼 좁힌다. */
-const ALUMNI_STRIDE = 23;
-/** 연도 열 다음, 약력이 시작하는 자리. 가장 긴 연도("2018–2024" = 42.3)를 담는다. */
-const ALUMNI_WHAT_X = 58;
-
 /**
- * ALUMNI를 접는 기준 폭 — 시안의 950단위를 **실제 글자 길이에서 다시 계산한다.**
+ * 연도 열 다음, 약력이 시작하는 자리.
  *
- * 950은 시안의 짧은 자리표시자를 재고 나온 값이라, 진짜 약력이 들어가자 좁은
- * 화면에서 명함이 장면 안으로 밀고 들어왔다. 그래서 기준을 글자에 매단다 —
- * `profile.json`의 줄이 길어지면 기준선도 따라 올라가고, 짧아지면 내려간다.
- *
- * 조건: 가장 긴 줄의 오른쪽 끝 + 여백 ≤ 장면 왼쪽 끝.
- *   (350 − w/2) + EDGE + 열너비 + GAP ≤ STAGE_LEFT
+ * 연도는 모노 폰트라 `textWidth`의 글자별 배율이 안 맞는다(숫자 0.55로 잡지만
+ * 모노는 en dash까지 전부 0.6 정폭이다). 가장 긴 연도를 정폭으로 재고 8을 띄운다.
  */
-const ALUMNI_GAP = 56;
-/** 장면이 시작하는 자리 — 가장 바깥 나이테의 글 점이 여기까지 온다(350 − RADIUS_MAX). */
-const STAGE_LEFT = CENTER.x - RADIUS_MAX;
+const ALUMNI_MONO_RATIO = 0.6;
+const ALUMNI_WHAT_X =
+	Math.ceil(
+		Math.max(...PROFILE.alumni.map((entry) => [...entry.years].length)) *
+			ALUMNI_MONO_RATIO *
+			ALUMNI_YEAR_SIZE,
+	) + 8;
+/**
+ * 약력 한 줄이 쓸 수 있는 폭. 넘으면 연도 옆에서 두 줄로 접는다.
+ *
+ * 한 줄로는 애초에 안 된다 — 좌측 프레임선 안쪽에 남는 자리는 16:9에서 187단위가
+ * 천장이고(선이 폭의 118/700인데 그 폭이 화면비에 묶여 있다), 연도 열을 빼면
+ * 약력 몫은 137단위다. "SKKU Semiconductor System Engineering"은 195단위라
+ * 5.4px까지 줄여야 들어간다. 그래서 크기가 아니라 줄로 푼다.
+ */
+const ALUMNI_WRAP_W = 100;
+/** 한 약력 안에서의 줄 간격 · 약력끼리의 간격. */
+const ALUMNI_LINE_H = 13;
+const ALUMNI_ENTRY_GAP = 10;
+/** ALUMNI 라벨(y=0) 아래 첫 줄이 앉는 자리. */
+const ALUMNI_TOP = 30;
+
+/** 접은 결과. 자리도 여기서 같이 잡는다 — 줄 수가 약력마다 다르다. */
+const ALUMNI_ROWS = PROFILE.alumni.reduce<
+	{ years: string; lines: string[]; y: number }[]
+>((rows, entry) => {
+	const prev = rows[rows.length - 1];
+	const y = prev ? prev.y + prev.lines.length * ALUMNI_LINE_H + ALUMNI_ENTRY_GAP : ALUMNI_TOP;
+	rows.push({ years: entry.years, lines: wrapText(entry.what, ALUMNI_SIZE, ALUMNI_WRAP_W, 2), y });
+	return rows;
+}, []);
+
+const ALUMNI_LAST = ALUMNI_ROWS[ALUMNI_ROWS.length - 1];
+const ALUMNI_BOTTOM = ALUMNI_LAST
+	? ALUMNI_LAST.y + (ALUMNI_LAST.lines.length - 1) * ALUMNI_LINE_H
+	: ALUMNI_TOP;
+
 const ALUMNI_COL_W = Math.max(
 	// ALUMNI 라벨은 letter-spacing이 붙어 글자 수만큼 더 벌어진다.
 	textWidth('ALUMNI', ALUMNI_LABEL_SIZE) + 'ALUMNI'.length * ALUMNI_LABEL_SPACING,
-	...PROFILE.alumni.map((entry) => ALUMNI_WHAT_X + textWidth(entry.what, ALUMNI_SIZE)),
+	...ALUMNI_ROWS.flatMap((row) =>
+		row.lines.map((line) => ALUMNI_WHAT_X + textWidth(line, ALUMNI_SIZE)),
+	),
 );
+
+/**
+ * ALUMNI를 접는 기준 폭 — **좌측 프레임선 안에 들어올 때만 편다.**
+ *
+ * 전에는 기준이 장면 왼쪽 끝(350 − RADIUS_MAX)이었다. 겹치지는 않았지만 명함이
+ * 프레임선을 넘어 가운데로 뻗어 보였다. 선을 기준으로 바꾸면 그 두 가지가 한 규칙이 된다 —
+ * 선은 장면보다 항상 왼쪽이라, 선 안에 들어오면 장면은 자동으로 안전하다.
+ *
+ * 조건: EDGE + 열너비 + 여백 ≤ 폭 × (BAND_L / 700)
+ */
+/**
+ * 선까지 남겨두는 여백. `textWidth`는 어림이라 라틴 글줄을 3~4% 적게 잡는데
+ * (재보니 가장 큰 오차가 +3.5), 그 오차를 여기서 흡수한다.
+ */
+const ALUMNI_BAND_MARGIN = 6;
 const ALUMNI_MIN_W = Math.ceil(
-	2 * (CENTER.x + EDGE + ALUMNI_COL_W + ALUMNI_GAP - STAGE_LEFT),
+	(VIEW_W * (EDGE + ALUMNI_COL_W + ALUMNI_BAND_MARGIN)) / BAND_L,
 );
 
 const PANEL_ROWS = [592, 624, 656, 688, 720];
@@ -375,7 +421,7 @@ const REFLECTIONS = [
 						x={-8}
 						y={-20}
 						width={ALUMNI_COL_W + 16}
-						height={PROFILE.alumni.length * ALUMNI_STRIDE + 32}
+						height={ALUMNI_BOTTOM + 32}
 					/>
 					<text
 						x="0"
@@ -387,12 +433,16 @@ const REFLECTIONS = [
 					>
 						ALUMNI
 					</text>
-					{PROFILE.alumni.map((entry, i) => (
-						<text class="al-line" x="0" y={30 + i * ALUMNI_STRIDE} font-size={ALUMNI_SIZE}>
+					{ALUMNI_ROWS.map((row) => (
+						<text class="al-line" x="0" y={row.y} font-size={ALUMNI_SIZE}>
 							<tspan class="mono" font-size={ALUMNI_YEAR_SIZE} opacity="0.7">
-								{entry.years}
+								{row.years}
 							</tspan>
-							<tspan x={ALUMNI_WHAT_X}>{entry.what}</tspan>
+							{row.lines.map((line, i) => (
+								<tspan x={ALUMNI_WHAT_X} y={row.y + i * ALUMNI_LINE_H}>
+									{line}
+								</tspan>
+							))}
 						</text>
 					))}
 				</g>
@@ -419,14 +469,14 @@ const REFLECTIONS = [
 		<rect class="cover" filter="url(#grainw)" opacity="0.05" pointer-events="none"></rect>
 		<line
 			class="band"
-			data-at="118"
+			data-at={BAND_L}
 			stroke="#ffffff"
 			stroke-width="0.6"
 			opacity="0.04"
 			pointer-events="none"></line>
 		<line
 			class="band"
-			data-at="606"
+			data-at={BAND_R}
 			stroke="#ffffff"
 			stroke-width="0.9"
 			opacity="0.056"
