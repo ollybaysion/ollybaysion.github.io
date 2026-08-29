@@ -30,6 +30,11 @@ const transform = x === 0 ? undefined : `translate(${x},0)`;
 			aria-label={label}
 			transform={transform}
 		>
+			{/*
+			  아이콘은 윤곽선(stroke)만 있는 그림이라, 이게 없으면 그 가는 선을
+			  정확히 눌러야 열린다. 15단위 아이콘 둘레에 눌리는 판을 깐다.
+			*/}
+			<rect class="soc-hit" x="-4" y="-4" width="23" height="23" />
 			<slot />
 		</a>
 	)
@@ -49,6 +54,12 @@ const transform = x === 0 ? undefined : `translate(${x},0)`;
 
 	.soc.is-inert {
 		cursor: default;
+	}
+
+	.soc-hit {
+		fill: #ffffff;
+		fill-opacity: 0;
+		pointer-events: all;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

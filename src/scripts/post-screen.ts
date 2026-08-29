@@ -12,6 +12,12 @@ import { SEA_ART_W } from "../lib/stage/sea.ts";
 /** 정본 좌표계. 메인의 세로(790)를 같이 봐야 배율이 세 화면에서 같아진다. */
 const VIEW_W = 700;
 const MAIN_H = 790;
+/**
+ * 배율 상한. 무대는 화면을 채워야 하지만 **본문은 읽는 글이라 화면 따라 커지면 안 된다** —
+ * 상한이 없으면 큰 화면에서 15px 본문이 20px까지 부풀고 글줄 폭도 950px을 넘는다.
+ * 상한에 걸린 뒤에도 풍경(비네트·프레임선·수평선·바다)은 viewBox가 벌어져 화면 끝까지 간다.
+ */
+const K_MAX = 1.1;
 /** 바다 그림에서 수평선에 해당하는 y. */
 const SEA_BASE = 590;
 const SEA_SPAN = 200;
@@ -27,7 +33,7 @@ if (article) {
     const width = document.documentElement.clientWidth;
     if (width === 0) return;
 
-    const k = Math.min(width / VIEW_W, window.innerHeight / MAIN_H);
+    const k = Math.min(width / VIEW_W, window.innerHeight / MAIN_H, K_MAX);
     const w = width / k;
     const left = VIEW_W / 2 - w / 2;
 

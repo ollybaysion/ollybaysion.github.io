@@ -11,6 +11,8 @@
 /** 정본 좌표계. 메인과 같은 배율을 쓰려고 메인의 세로(790)도 들고 있는다. */
 const VIEW_W = 700;
 const MAIN_H = 790;
+/** 배율 상한 — 읽는 화면은 화면 따라 글씨가 커지면 안 된다(글 화면과 같은 값). */
+const K_MAX = 1.1;
 
 const svg = document.querySelector<SVGSVGElement>("#seriesscene");
 
@@ -23,7 +25,7 @@ if (svg) {
     const width = svg!.getBoundingClientRect().width;
     if (width === 0) return;
 
-    const k = Math.min(width / VIEW_W, window.innerHeight / MAIN_H);
+    const k = Math.min(width / VIEW_W, window.innerHeight / MAIN_H, K_MAX);
     const w = width / k;
     const left = VIEW_W / 2 - w / 2;
     // 회차가 적어 한 화면도 못 채우면 무대를 화면 끝까지 늘인다 — 아래가 잘려 보이지 않게.

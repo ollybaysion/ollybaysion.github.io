@@ -18,9 +18,6 @@ const EDGE = 52;
 const CX = 350;
 const CY = 235;
 
-/** ALUMNI 열은 무대가 이보다 좁으면 물러난다(시안). */
-const ALUMNI_MIN_W = 950;
-
 /** 이 선 아래는 원 구역이 아니다 — CLI·바다·패널의 영역. */
 const CLI_TOP = 470;
 const CLI_BOTTOM = 514;
@@ -185,7 +182,11 @@ function start(svg: SVGSVGElement): void {
     );
     if (alumniCol) {
       alumniCol.setAttribute("transform", `translate(${left + EDGE},196)`);
-      alumniCol.classList.toggle("is-hidden", w < ALUMNI_MIN_W);
+      // 물러나는 기준은 실제 글자 길이에서 나온다(MainStage의 ALUMNI_MIN_W).
+      alumniCol.classList.toggle(
+        "is-hidden",
+        w < Number(alumniCol.dataset.minW),
+      );
     }
   }
 
@@ -291,6 +292,14 @@ function start(svg: SVGSVGElement): void {
       modalState.open = false;
       return;
     }
+
+    // 좌측 명함은 읽는 것이지 누르는 것이 아니다 — 눌러도 아무 일도 없다.
+    if (
+      (e.target as Element | null)?.closest?.("#sitename, #social, #alumni-col")
+    ) {
+      return;
+    }
+
     if (panelState.open) {
       const panelTop = PANEL_TOP + panelState.y;
       if (point.y > panelTop) {
@@ -303,16 +312,28 @@ function start(svg: SVGSVGElement): void {
           panelState.open = false;
         return;
       }
-      // 원 구역 클릭만 리로드 — CLI·그 아래는 무시.
-      if (point.y >= CLI_TOP) return;
-      openPanel(point.x, point.y);
-      panelState.pulse = 1;
+    }
+
+    /*
+      목록을 부르는 건 가운데 열의 원 구역뿐이다 — 거기가 좌표가 사는 자리라
+      "이 지점에서 가까운 글"이 뜻을 갖는다. 양 옆 여백·CLI·그 아래는 무대 밖이라
+      누르면 목록이 내려간다.
+    */
+    const onStage =
+      point.x >= EDGE && point.x <= VIEW_W - EDGE && point.y < CLI_TOP;
+    if (!onStage) {
+      panelState.open = false;
       return;
     }
-    if (point.y >= CLI_TOP) return;
+
     openPanel(point.x, point.y);
-    panelState.open = true;
-    panelState.t = 0;
+    if (panelState.open) {
+      // 이미 올라와 있으면 그 지점 기준으로 내용만 갈아끼운다.
+      panelState.pulse = 1;
+    } else {
+      panelState.open = true;
+      panelState.t = 0;
+    }
   }
 
   function onKey(e: KeyboardEvent): void {

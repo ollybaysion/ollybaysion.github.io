@@ -15,9 +15,12 @@ import { PROFILE } from '../config/profile.ts';
 import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
 import { meanAngle } from '../lib/coords/arc.ts';
+import { CENTER, RADIUS_MAX } from '../lib/coords/constants.ts';
 import { labelPlacement } from '../lib/stage/label.ts';
-import { angleColor, categoryColor } from '../lib/stage/palette.ts';
+import { EDGE_L as EDGE } from '../lib/stage/list.ts';
+import { angleColor } from '../lib/stage/palette.ts';
 import { SEA_BANDS } from '../lib/stage/sea.ts';
+import { textWidth } from '../lib/stage/text.ts';
 
 const posts = postsData.posts.map((post) => ({
 	...post,
@@ -52,8 +55,30 @@ const constellations = Object.entries(seriesData.series).flatMap(([name, members
 
 /** ALUMNI 줄 간격(시안: 32 · 58 · 84). */
 const ALUMNI_STRIDE = 26;
-/** 연도 열(x=0)과 약력 열(x=76) 사이의 홈. 호를 가리키는 점이 여기 앉는다. */
-const ALUMNI_DOT_X = 66;
+/** 연도 열 다음, 약력이 시작하는 자리. */
+const ALUMNI_WHAT_X = 76;
+
+/**
+ * ALUMNI를 접는 기준 폭 — 시안의 950단위를 **실제 글자 길이에서 다시 계산한다.**
+ *
+ * 950은 시안의 짧은 자리표시자를 재고 나온 값이라, 진짜 약력이 들어가자 좁은
+ * 화면에서 명함이 장면 안으로 밀고 들어왔다. 그래서 기준을 글자에 매단다 —
+ * `profile.json`의 줄이 길어지면 기준선도 따라 올라가고, 짧아지면 내려간다.
+ *
+ * 조건: 가장 긴 줄의 오른쪽 끝 + 여백 ≤ 장면 왼쪽 끝.
+ *   (350 − w/2) + EDGE + 열너비 + GAP ≤ STAGE_LEFT
+ */
+const ALUMNI_GAP = 16;
+/** 장면이 시작하는 자리 — 가장 바깥 나이테의 글 점이 여기까지 온다(350 − RADIUS_MAX). */
+const STAGE_LEFT = CENTER.x - RADIUS_MAX;
+const ALUMNI_COL_W = Math.max(
+	// ALUMNI 라벨은 letter-spacing 3이라 글자 수만큼 더 벌어진다.
+	textWidth('ALUMNI', 11) + 'ALUMNI'.length * 3,
+	...PROFILE.alumni.map((entry) => ALUMNI_WHAT_X + textWidth(entry.what, 11.5)),
+);
+const ALUMNI_MIN_W = Math.ceil(
+	2 * (CENTER.x + EDGE + ALUMNI_COL_W + ALUMNI_GAP - STAGE_LEFT),
+);
 
 const PANEL_ROWS = [592, 624, 656, 688, 720];
 const REFLECTIONS = [
@@ -290,9 +315,6 @@ const REFLECTIONS = [
 			<a id="p-more" aria-hidden="true" tabindex="-1">
 				<text x="52" y="762" font-size="11.5" fill="#8f8c85" opacity="0.8"></text>
 			</a>
-			<text x="648" y="762" text-anchor="end" font-size="10.5" fill="#8f8c85" opacity="0.8"
-				>유사한 순 — 클릭 지점과 글 좌표의 거리</text
-			>
 		</g>
 
 		{/*
@@ -332,32 +354,28 @@ const REFLECTIONS = [
 
 		{
 			PROFILE.alumni.length > 0 && (
-				<g id="alumni-col">
+				<g id="alumni-col" data-min-w={ALUMNI_MIN_W}>
+					{/*
+					  명함은 읽는 것이지 누르는 것이 아니다 — 이 판이 클릭을 받아
+					  뒤의 무대로 넘기지 않는다(파도 목록이 올라오지 않게).
+					*/}
+					<rect
+						class="card-shield"
+						x={-8}
+						y={-20}
+						width={ALUMNI_COL_W + 16}
+						height={PROFILE.alumni.length * ALUMNI_STRIDE + 32}
+					/>
 					<text x="0" y="0" font-size="11" letter-spacing="3" fill="#8f8c85" opacity="0.8">
 						ALUMNI
 					</text>
 					{PROFILE.alumni.map((entry, i) => (
-						<>
-							{/*
-							  연도와 약력 사이 홈에 놓인 점 — 이 줄이 무대의 어느 호에 속하나.
-							  글 점·파도 행과 같은 색 문법이라 커피와 개발이 한눈에 갈린다.
-							*/}
-							{entry.category && (
-								<circle
-									class="al-dot"
-									cx={ALUMNI_DOT_X}
-									cy={32 + i * ALUMNI_STRIDE - 4}
-									r="2.5"
-									fill={categoryColor(entry.category)}
-								/>
-							)}
-							<text class="al-line" x="0" y={32 + i * ALUMNI_STRIDE} font-size="11.5">
-								<tspan class="mono" font-size="10.5" opacity="0.7">
-									{entry.years}
-								</tspan>
-								<tspan x="76">{entry.what}</tspan>
-							</text>
-						</>
+						<text class="al-line" x="0" y={32 + i * ALUMNI_STRIDE} font-size="11.5">
+							<tspan class="mono" font-size="10.5" opacity="0.7">
+								{entry.years}
+							</tspan>
+							<tspan x={ALUMNI_WHAT_X}>{entry.what}</tspan>
+						</text>
 					))}
 				</g>
 			)
@@ -475,9 +493,10 @@ const REFLECTIONS = [
 		fill: #8f8c85;
 	}
 
-	/* 점만 색을 가진다 — 글자는 명함답게 조용하게 둔다. */
-	.al-dot {
-		opacity: 0.85;
+	.card-shield {
+		fill: #ffffff;
+		fill-opacity: 0;
+		pointer-events: all;
 	}
 
 	/* 별자리 — 평시엔 희미하게, 호버하면 점등(SeriesMain.dc.html 정본). */
