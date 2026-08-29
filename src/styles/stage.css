@@ -1,0 +1,33 @@
+/*
+  무대 바탕 — 화면 4종(메인·목록·글·시리즈 목록)이 함께 쓴다.
+  색·글꼴은 `~/repo/blog-screens/*.dc.html` 정본에서 가져왔다.
+*/
+
+:root {
+  --stage-bg: #131316;
+  --stage-ink: #e8e6e1;
+  --stage-ink-dim: #d8d5cd;
+  --stage-muted: #8f8c85;
+  --stage-rule: #2a2a2e;
+
+  --stage-serif: "Noto Serif KR", "Noto Serif", serif;
+  --stage-sans: "Noto Sans KR", system-ui, sans-serif;
+  --stage-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html {
+  background: var(--stage-bg);
+}
+
+body {
+  margin: 0;
+  background: var(--stage-bg);
+  color: var(--stage-ink);
+  font-family: var(--stage-sans);
+  overflow-wrap: break-word;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
