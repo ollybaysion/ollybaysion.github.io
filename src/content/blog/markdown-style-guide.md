@@ -1,9 +1,13 @@
 ---
 title: 'Markdown Style Guide'
 description: 'Here is a sample of some basic Markdown syntax that can be used when writing Markdown content in Astro.'
-pubDate: 'Jun 19 2024'
+date: 'Jun 19 2024'
+category: '개발'
+tags: ['astro', '마크다운']
 heroImage: '../../assets/blog-placeholder-1.jpg'
 ---
+
+<!-- markdownlint-disable MD025 MD033 -- 마크다운 문법 견본 문서라 h1 중복·인라인 HTML이 본문 그 자체다. -->
 
 Here is a sample of some basic Markdown syntax that can be used when writing Markdown content in Astro.
 

@@ -1,7 +1,9 @@
 ---
 title: 'Second post'
 description: 'Lorem ipsum dolor sit amet'
-pubDate: 'Jul 15 2022'
+date: 'Jul 15 2022'
+category: '개발'
+tags: ['astro']
 heroImage: '../../assets/blog-placeholder-4.jpg'
 ---
 
