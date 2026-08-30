@@ -7,12 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { slug as githubSlug } from 'github-slugger';
 import { load as loadYaml } from 'js-yaml';
 import { CATEGORY_NAMES, isCategory } from '../../src/config/categories.ts';
-import { COORDS_VERSION } from '../../src/lib/coords/constants.ts';
+import { COORDS_VERSION, EMBED_MODEL, EMBED_VERSION, VECTOR_DIMS } from '../../src/lib/coords/constants.ts';
 import { readingMinutes } from '../../src/lib/stage/reading.ts';
 
 export const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 export const CONTENT_DIR = path.join(PROJECT_ROOT, 'src/content/blog');
 export const LEDGER_PATH = path.join(PROJECT_ROOT, 'src/data/coordinates.json');
+export const VECTORS_PATH = path.join(PROJECT_ROOT, 'src/data/vectors.json');
 export const GENERATED_DIR = path.join(PROJECT_ROOT, 'src/data/generated');
 
 const CONTENT_EXTENSIONS = new Set(['.md', '.mdx']);
@@ -117,6 +118,8 @@ export async function readPosts() {
 				episode: typeof data.episode === 'number' ? data.episode : undefined,
 				description: typeof data.description === 'string' ? data.description : undefined,
 				readingMinutes: readingMinutes(body),
+				// 임베딩이 읽는다. 화면으로 나가는 JSON에는 담기지 않는다.
+				body,
 			};
 		}),
 	);
@@ -147,4 +150,64 @@ export async function readLedger() {
 
 export async function writeLedger(ledger) {
 	await writeFile(LEDGER_PATH, serializeJson(ledger), 'utf8');
+}
+
+/**
+ * 벡터 원장. 파일이 없으면 빈 원장으로 시작한다 — 임베딩을 아직 한 번도 안 돌린
+ * 레포에서도 좌표 배정과 빌드는 그대로 굴러가야 한다(벡터 없으면 태그 자카드로 물러선다).
+ */
+export async function readVectors() {
+	const raw = await readFile(VECTORS_PATH, 'utf8').catch((err) => {
+		if (err.code === 'ENOENT') return null;
+		throw err;
+	});
+	if (raw === null) {
+		return { vectors: { version: EMBED_VERSION, model: EMBED_MODEL, dims: VECTOR_DIMS, entries: {} }, raw: null };
+	}
+
+	const vectors = JSON.parse(raw);
+	if (vectors.version !== EMBED_VERSION || vectors.model !== EMBED_MODEL) {
+		throw new Error(
+			`벡터 원장이 엔진과 다르다: 원장 ${vectors.version}/${vectors.model} vs 엔진 ${EMBED_VERSION}/${EMBED_MODEL}.\n` +
+				`  버전이나 모델을 바꿨다면 벡터 전량 재측량이라는 뜻이다 — src/data/vectors.json을 지우고 \`npm run embed\`를 다시 돌릴 것.`,
+		);
+	}
+	if (vectors.dims !== VECTOR_DIMS) {
+		throw new Error(`벡터 차원이 다르다: 원장 ${vectors.dims} vs 엔진 ${VECTOR_DIMS}.`);
+	}
+	return { vectors, raw };
+}
+
+/**
+ * 벡터 원장 직렬화 — 글 한 편이 한 줄이다.
+ *
+ * 2칸 들여쓰기로 적으면 1024개 숫자가 각자 한 줄씩 차지해 한 편에 18KB가 된다.
+ * 한 줄로 붙이면 절반이고, 무엇보다 새 글의 diff가 **추가된 줄 하나**로 남는다 —
+ * 사람이 리뷰할 수 있는 모양이다.
+ */
+export function serializeVectors(vectors) {
+	const rows = Object.entries(vectors.entries).map(
+		([slug, entry]) => `    ${JSON.stringify(slug)}: ${JSON.stringify(entry)}`,
+	);
+	return (
+		`{\n` +
+		`  "version": ${JSON.stringify(vectors.version)},\n` +
+		`  "model": ${JSON.stringify(vectors.model)},\n` +
+		`  "dims": ${vectors.dims},\n` +
+		`  "entries": {\n${rows.join(',\n')}\n  }\n` +
+		`}\n`
+	);
+}
+
+export async function writeVectors(vectors) {
+	await writeFile(VECTORS_PATH, serializeVectors(vectors), 'utf8');
+}
+
+/** 슬러그 → 벡터. 없는 슬러그는 빠진다(유사도가 태그로 물러선다). */
+export function vectorLookup(vectors) {
+	const out = new Map();
+	for (const [slug, entry] of Object.entries(vectors.entries)) {
+		out.set(slug, entry.vector);
+	}
+	return out;
 }

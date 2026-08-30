@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { D_MAX } from '../../src/lib/coords/constants.ts';
-import { constellations, groupByCategory, neighborsOf, orderSeries } from '../../src/lib/coords/derive.ts';
+import { DISCOVERY_FLOOR, D_MAX, VECTOR_CEIL, VECTOR_FLOOR } from '../../src/lib/coords/constants.ts';
+import {
+	constellations,
+	discoveriesOf,
+	discoveryMap,
+	groupByCategory,
+	neighborsOf,
+	orderSeries,
+} from '../../src/lib/coords/derive.ts';
 import type { PlacedEntry } from '../../src/lib/coords/derive.ts';
 import { screenDistance } from '../../src/lib/coords/position.ts';
 
@@ -150,5 +157,83 @@ describe('groupByCategory', () => {
 			개발: ['개발글'],
 			커피: ['최근-커피', '옛날-커피'],
 		});
+	});
+});
+
+describe('discoveriesOf', () => {
+	/** 코사인이 정확히 `cos`가 되도록, 첫 글을 기준축에 세운 2차원 벡터. */
+	const at = (cos: number) => [cos, Math.sqrt(1 - cos * cos)];
+	const AXIS = [1, 0];
+	/** 발견 문턱을 넉넉히 넘는 코사인 / 못 넘는 코사인. */
+	const HIGH = at(VECTOR_FLOOR + (VECTOR_CEIL - VECTOR_FLOOR) * (DISCOVERY_FLOOR + 0.3));
+	const LOW = at(VECTOR_FLOOR + (VECTOR_CEIL - VECTOR_FLOOR) * (DISCOVERY_FLOOR - 0.1));
+
+	const here = entry('여기', 270, 170, { category: '커피', vector: AXIS });
+	const all = [
+		here,
+		entry('같은-카테고리-쌍둥이', 271, 170, { category: '커피', vector: AXIS }),
+		entry('다른-카테고리-닮음', 90, 170, { category: '개발', vector: HIGH }),
+		entry('다른-카테고리-어중간', 92, 170, { category: '개발', vector: LOW }),
+		entry('다른-카테고리-남', 94, 170, { category: '영화', vector: at(0) }),
+	];
+
+	it('같은 카테고리는 아무리 닮아도 빠진다 — 그건 가까운 글이 할 일이다', () => {
+		const found = discoveriesOf(here, all);
+		assert.ok(!found.some((item) => item.slug === '같은-카테고리-쌍둥이'));
+	});
+
+	it('문턱을 넘은 다른 카테고리 글만 데려온다', () => {
+		assert.deepEqual(
+			discoveriesOf(here, all).map((item) => item.slug),
+			['다른-카테고리-닮음'],
+		);
+	});
+
+	it('닮은 순으로 주고, 편수를 넘기지 않는다', () => {
+		const many = [
+			here,
+			entry('셋', 90, 170, { category: '개발', vector: at(VECTOR_CEIL - 0.03) }),
+			entry('하나', 91, 170, { category: '개발', vector: at(VECTOR_CEIL) }),
+			entry('둘', 92, 170, { category: '개발', vector: at(VECTOR_CEIL - 0.01) }),
+			entry('넷', 93, 170, { category: '개발', vector: at(VECTOR_CEIL - 0.05) }),
+		];
+		assert.deepEqual(
+			discoveriesOf(here, many, 3).map((item) => item.slug),
+			['하나', '둘', '셋'],
+		);
+	});
+
+	it('벡터가 없으면 태그로 물러선다', () => {
+		const target = entry('여기', 270, 170, { category: '커피', tags: ['추출', '온도'] });
+		const others = [
+			target,
+			entry('태그-겹침', 90, 170, { category: '개발', tags: ['추출', '온도'] }),
+			entry('태그-남', 92, 170, { category: '개발', tags: ['배포'] }),
+		];
+		assert.deepEqual(
+			discoveriesOf(target, others).map((item) => item.slug),
+			['태그-겹침'],
+		);
+	});
+
+	it('벡터도 태그도 없으면 아무도 데려오지 않는다', () => {
+		const bare = entry('여기', 270, 170, { category: '커피' });
+		assert.deepEqual(discoveriesOf(bare, [bare, entry('저기', 90, 170, { category: '개발' })]), []);
+	});
+
+	it('글이 하나뿐이어도 죽지 않는다', () => {
+		assert.deepEqual(discoveriesOf(here, [here]), []);
+	});
+});
+
+describe('discoveryMap', () => {
+	it('모든 글이 열쇠로 들어간다 — 빈 목록이라도', () => {
+		const all = [
+			entry('가', 270, 170, { category: '커피' }),
+			entry('나', 90, 170, { category: '개발' }),
+		];
+		const map = discoveryMap(all);
+		assert.deepEqual(Object.keys(map).sort(), ['가', '나']);
+		assert.deepEqual(map['가'], []);
 	});
 });

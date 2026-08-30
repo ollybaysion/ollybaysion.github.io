@@ -25,15 +25,25 @@ export function normalizeTags(tags: readonly string[]): string[] {
 	return out;
 }
 
-/**
- * FNV-1a(32bit) → [0, 1).
- * UTF-8 바이트 기준이라 한글도 환경과 무관하게 같은 값이 나온다.
- */
-export function hash01(str: string): number {
+/** FNV-1a(32bit) 원본. UTF-8 바이트 기준이라 한글도 환경과 무관하게 같은 값이 나온다. */
+function fnv1a(str: string): number {
 	let hash = FNV_OFFSET_BASIS;
 	for (const byte of encoder.encode(str)) {
 		hash ^= byte;
 		hash = Math.imul(hash, FNV_PRIME) >>> 0;
 	}
-	return hash / 0x1_0000_0000;
+	return hash >>> 0;
+}
+
+/** FNV-1a → [0, 1). */
+export function hash01(str: string): number {
+	return fnv1a(str) / 0x1_0000_0000;
+}
+
+/**
+ * FNV-1a → 8자리 16진수. 사람이 눈으로 비교하는 지문용이다
+ * (`vectors.json`의 `source` — 글이 고쳐졌는지 알아보는 표시).
+ */
+export function fingerprint(str: string): string {
+	return fnv1a(str).toString(16).padStart(8, '0');
 }

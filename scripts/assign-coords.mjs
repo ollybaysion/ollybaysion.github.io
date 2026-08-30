@@ -15,7 +15,7 @@ import { placeAngle } from '../src/lib/coords/angle.ts';
 import { placeRadius } from '../src/lib/coords/radius.ts';
 import { confusableTags } from '../src/lib/coords/tags.ts';
 import { normalizeTags } from '../src/lib/coords/hash.ts';
-import { readLedger, readPosts, serializeJson, writeLedger } from './lib/content.mjs';
+import { readLedger, readPosts, readVectors, serializeJson, vectorLookup, writeLedger } from './lib/content.mjs';
 
 const checkOnly = process.argv.includes('--check') || process.env.CI === 'true';
 const warnings = [];
@@ -26,6 +26,9 @@ function warn(message) {
 
 const posts = await readPosts();
 const { ledger, raw: before } = await readLedger();
+// 벡터가 있으면 유사도가 코사인으로, 없으면 태그 자카드로 잰다(둘 다 같은 눈금).
+const { vectors } = await readVectors();
+const vectorOf = vectorLookup(vectors);
 
 if (posts.length === 0) {
 	console.log('[coords] 글이 없다. 원장을 그대로 둔다.');
@@ -60,7 +63,7 @@ for (const [slug, entry] of Object.entries(ledger.entries)) {
 	const post = postBySlug.get(slug);
 	if (!post) continue;
 	const anchors = anchorsByCategory.get(post.category) ?? [];
-	anchors.push({ slug, tags: post.tags, series: post.series, angle: entry.angle });
+	anchors.push({ slug, tags: post.tags, series: post.series, vector: vectorOf.get(slug), angle: entry.angle });
 	anchorsByCategory.set(post.category, anchors);
 }
 
@@ -87,11 +90,15 @@ for (const post of posts) {
 
 	const arc = arcOf(post.category);
 	const anchors = anchorsByCategory.get(post.category) ?? [];
-	const angle = placeAngle({ slug: post.slug, tags: post.tags, series: post.series }, anchors, arc);
+	const input = { slug: post.slug, tags: post.tags, series: post.series, vector: vectorOf.get(post.slug) };
+	if (!input.vector) {
+		warn(`"${post.slug}"에 벡터가 없다 — 태그 자카드로 자리를 잡는다. \`npm run embed\`를 먼저 돌렸는지 볼 것.`);
+	}
+	const angle = placeAngle(input, anchors, arc);
 	const radius = placeRadius(post.date, epoch);
 
 	ledger.entries[post.slug] = { angle, radius, placedAt };
-	anchors.push({ slug: post.slug, tags: post.tags, series: post.series, angle });
+	anchors.push({ ...input, angle });
 	anchorsByCategory.set(post.category, anchors);
 	added.push({ slug: post.slug, category: post.category, angle, radius });
 }

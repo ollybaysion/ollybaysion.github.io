@@ -7,12 +7,14 @@
   },
   "scripts": {
     "new": "node scripts/new-post.mjs",
+    "embed": "node scripts/embed.mjs",
+    "embed:check": "node scripts/embed.mjs --check",
     "coords": "node scripts/assign-coords.mjs",
     "coords:check": "node scripts/assign-coords.mjs --check",
     "derived": "node scripts/build-derived.mjs",
-    "predev": "npm run coords && npm run derived",
+    "predev": "npm run embed && npm run coords && npm run derived",
     "dev": "astro dev",
-    "prebuild": "npm run coords && npm run derived",
+    "prebuild": "npm run embed && npm run coords && npm run derived",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
@@ -31,5 +33,8 @@
   "devDependencies": {
     "github-slugger": "^2.0.0",
     "js-yaml": "^5.4.1"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^4.2.0"
   }
 }

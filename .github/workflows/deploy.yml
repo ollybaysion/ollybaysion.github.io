@@ -17,6 +17,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # 임베딩 모델(@huggingface/transformers, onnxruntime 포함 수백 MB)은 선택 의존성이다.
+      # 벡터는 src/data/vectors.json에 커밋되어 오므로 배포는 모델 없이 돈다 —
+      # CI=true라 prebuild의 embed는 "빠진 벡터가 있나"만 보고 지나간다.
+      NPM_CONFIG_OMIT: optional
     steps:
       - uses: actions/checkout@v4
       - uses: withastro/action@v4
