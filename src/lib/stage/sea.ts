@@ -13,6 +13,9 @@
  * 글의 좌표는 이 파일을 보지 않는다.
  */
 
+import { clamp01, hash, noise1, rng } from './noise.ts';
+import { INK } from './palette.ts';
+
 /** 수평선 — CLI 아래 선. 바다는 여기서 시작해 화면 바닥까지 간다. */
 export const HORIZON_Y = 518;
 
@@ -29,13 +32,6 @@ export const SEA_DEPTH = 272;
 const TRAVEL = 11.2;
 /** 세트 주기 — 큰 놈과 작은 놈이 번갈아 오는 리듬. */
 const SET = 19;
-/** 먹선 색. */
-const INK = '232,230,225';
-
-function clamp01(v: number): number {
-	return v < 0 ? 0 : v > 1 ? 1 : v;
-}
-
 function sstep(a: number, b: number, p: number): number {
 	const t = clamp01((p - a) / (b - a));
 	return t * t * (3 - 2 * t);
@@ -43,18 +39,6 @@ function sstep(a: number, b: number, p: number): number {
 
 function bump(a: number, b: number, p: number): number {
 	return Math.sin(Math.PI * clamp01((p - a) / (b - a)));
-}
-
-function hash(n: number): number {
-	const x = Math.sin(n * 127.1) * 43758.5453;
-	return x - Math.floor(x);
-}
-
-function noise1(x: number): number {
-	const i = Math.floor(x);
-	const f = x - i;
-	const u = f * f * (3 - 2 * f);
-	return hash(i) + (hash(i + 1) - hash(i)) * u;
 }
 
 function vn(x: number, sd: number): number {
@@ -305,6 +289,8 @@ export interface SeaWave {
 
 export interface SeaFrame {
 	wind: number;
+	/** 바람 방향 −1(왼쪽) ~ +1(오른쪽). 파도의 기울기를 정하는 그 값이다. */
+	dir: number;
 	waves: SeaWave[];
 }
 
@@ -358,7 +344,7 @@ export function createSea(): Sea {
 			}
 			while (born.length && (clock - born[0]!.born) / TRAVEL > 1.06) born.shift();
 
-			return { wind, waves };
+			return { wind, dir: (windDir(sec) - 0.5) * 2, waves };
 		},
 
 		freeze(clock) {
@@ -432,15 +418,6 @@ export interface GladeGlint {
 	/** 파도가 없을 때의 잔물결 위상과 속도. */
 	ph: number;
 	v: number;
-}
-
-/** 결정적 난수 — 새로고침마다 물비늘 배치가 흔들리면 다른 바다가 된다. */
-function rng(seed: number): () => number {
-	let s = seed >>> 0;
-	return () => {
-		s = (s * 1664525 + 1013904223) >>> 0;
-		return s / 4294967296;
-	};
 }
 
 export const GLADE_GLINTS: GladeGlint[] = (() => {

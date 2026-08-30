@@ -8,6 +8,7 @@
  * 붙일 자리는 id가 아니라 `data-` 표시로 찾는다. 두 화면이 id 규칙이 달라서
  * (`#glade-col` vs `#gladeP-col`) 이름으로 묶으면 한쪽이 반드시 어긋난다.
  */
+import type { SeaFrame } from "../lib/stage/sea.ts";
 import {
   createSea,
   flashAt,
@@ -35,8 +36,8 @@ export interface SeaScene {
   readonly reduceMotion: boolean;
   /** 자리가 바뀌었다. 캔버스 픽셀을 다시 잡고 한 장 그린다. */
   resize(box: SeaBox): void;
-  /** 한 프레임. */
-  render(t: number): void;
+  /** 한 프레임. 이 프레임의 바람을 돌려준다 — 같은 하늘의 것들이 그 값을 받는다. */
+  render(t: number): SeaFrame;
   /** 광원 색이 바뀌었다 — 수면에 비친 빛도 그 빛이다. */
   tint(color: string): void;
 }
@@ -131,7 +132,7 @@ export function mountSea(scope: ParentNode): SeaScene | null {
     });
   }
 
-  function render(t: number): void {
+  function render(t: number): SeaFrame {
     const clock = reduceMotion ? stillClock : t;
     // 깊이를 화면 높이에 눌러 담는다 — 세로 배율만 다르고 그리는 좌표는 무대 그대로다.
     const squash = view.h / view.depth;
@@ -139,6 +140,7 @@ export function mountSea(scope: ParentNode): SeaScene | null {
     g.clearRect(0, 0, view.w, view.depth);
     const frame = sea.draw(g, view.w, view.depth, clock, Date.now() / 1000);
     renderGlade(reduceMotion ? 0 : t, frame.wind, frame.waves);
+    return frame;
   }
 
   return {
