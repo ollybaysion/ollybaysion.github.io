@@ -79,9 +79,11 @@ const neighbors = (neighborsData.neighbors[slug] ?? [])
  * 붙이지 않는다 — 독자가 보는 숫자는 언제나 화면 거리에서 나와야 하는데, 여기 실린 건
  * 거리가 아니라 글 내용이 이어 준 것이기 때문이다. 대신 어느 카테고리에서 왔는지를 적는다.
  */
+const shown = new Set(neighbors.map((near) => near.slug));
 const discoveries = (discoveriesData.discoveries[slug] ?? []).flatMap((found) => {
 	const entry = bySlug.get(found.slug);
-	if (!entry) return [];
+	// 위 덩어리에 이미 실린 글은 빼고 준다 — 한 꼬리에 같은 줄이 두 번 나오지 않게.
+	if (!entry || shown.has(found.slug)) return [];
 	return [
 		{
 			slug: found.slug,
