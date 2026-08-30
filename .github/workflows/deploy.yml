@@ -18,10 +18,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # 임베딩 모델(@huggingface/transformers, onnxruntime 포함 수백 MB)은 선택 의존성이다.
-      # 벡터는 src/data/vectors.json에 커밋되어 오므로 배포는 모델 없이 돈다 —
+      # 임베딩 모델(@huggingface/transformers, onnxruntime 포함 수백 MB)은 글을 쓸 때만
+      # 든다. 벡터는 src/data/vectors.json에 커밋되어 오므로 배포는 모델 없이 돈다 —
       # CI=true라 prebuild의 embed는 "빠진 벡터가 있나"만 보고 지나간다.
-      NPM_CONFIG_OMIT: optional
+      #
+      # **optional이 아니라 dev를 뺀다.** optional을 빼면 astro의 번들러(rolldown)가
+      # 제 네이티브 바이너리까지 잃는다 — 네이티브 모듈은 플랫폼별 선택 의존성으로 온다.
+      NPM_CONFIG_OMIT: dev
     steps:
       - uses: actions/checkout@v4
       - uses: withastro/action@v4

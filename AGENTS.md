@@ -49,10 +49,12 @@ npm run new "탬핑을 다시 배웠다" -- -c 커피 -t 에스프레소,탬핑
 유사도 v2는 `Xenova/bge-m3`(cls·q8) 코사인이다. 모델은 선택 의존성이라 따로 받는다:
 
 ```bash
-npm i --include=optional   # 처음 한 번. 모델 자체는 npm run embed이 내려받는다(수백 MB)
+npm i   # 모델 자체는 npm run embed이 내려받는다(수백 MB)
 ```
 
-벡터가 커밋되어 오므로 **배포는 모델 없이 돈다**(`deploy.yml`이 `NPM_CONFIG_OMIT: optional`).
+벡터가 커밋되어 오므로 **배포는 모델 없이 돈다**(`deploy.yml`이 `NPM_CONFIG_OMIT: dev`).
+모델이 devDependencies에 있는 이유가 이것이다 — optional로 두고 optional을 빼면
+astro의 번들러가 제 네이티브 바이너리까지 잃는다.
 CI에서 도는 `embed:check`도 모델을 부르지 않는다 — 빠진 벡터가 있는지만 본다.
 
 원시 코사인은 0에서 시작하지 않는다(상관없는 한국어 산문끼리 0.3~0.43). 그래서
