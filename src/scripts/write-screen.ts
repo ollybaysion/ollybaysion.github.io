@@ -518,5 +518,10 @@ function start(root: HTMLElement): void {
 
 	setTheme(theme);
 	showTab(tabs.some((node) => node.dataset.tab === tab) ? tab : 'preview');
-	open(last !== '' && bySlug.has(last) ? last : '');
+
+	// `/write/?post={슬러그}` — 글 화면의 "수정"이 이 길로 들어온다.
+	// 담아둔 초안이 있으면 open()이 그걸 먼저 쓴다(고치다 만 게 있으면 그게 맞다).
+	const asked = new URLSearchParams(window.location.search).get('post') ?? '';
+	const first = bySlug.has(asked) ? asked : bySlug.has(last) ? last : '';
+	open(first);
 }

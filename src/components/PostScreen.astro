@@ -217,6 +217,19 @@ const dot = minimapDot(post);
 				>메인</text
 			>
 		</a>
+		<text x={HEAD.back.x + 88} y={HEAD.back.y} font-size="11.5" fill="#8f8c85" opacity="0.45"
+			>·</text
+		>
+		{/*
+		  이 글을 쓰기 화면에 실어 연다. 읽다가 고칠 데를 봤을 때 누를 자리가
+		  여기 말고는 없다 — 돌아가는 길 둘과 같은 줄, 같은 무게로 앉힌다.
+		*/}
+		<a href={`/write/?post=${encodeURIComponent(slug)}`}>
+			<rect class="hit" x={HEAD.back.x + 94} y="18" width="52" height="24"></rect>
+			<text x={HEAD.back.x + 104} y={HEAD.back.y} font-size="11.5" fill="#8f8c85" opacity="0.85"
+				>수정</text
+			>
+		</a>
 
 		<text
 			class="serif"
