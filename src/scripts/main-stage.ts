@@ -8,7 +8,11 @@
  *        다른 지점 클릭 = 리로드, 내리기 = 닫기.
  * CLI = 데모. 명령 체계가 미확정이라 입력 확인 모달까지만 간다.
  */
-import { angleColor, nearestCategory } from "../lib/stage/palette.ts";
+import {
+  angleColor,
+  angleColorWashed,
+  nearestCategory,
+} from "../lib/stage/palette.ts";
 import {
   createSea,
   flashAt,
@@ -125,6 +129,8 @@ function start(svg: SVGSVGElement): void {
   const bloomStops = [
     ...svg.querySelectorAll<SVGStopElement>("#hap-bloom stop"),
   ];
+  /** 광원 안쪽 — 색이 씻긴 자리들. 얼마나 바랠지는 각자 data-wash에 적혀 있다. */
+  const washed = [...svg.querySelectorAll<SVGElement>("[data-wash]")];
   const cliLine = svg.querySelector<SVGGElement>("#cli-line")!;
   const sitename = svg.querySelector<SVGGElement>("#sitename")!;
   const social = svg.querySelector<SVGGElement>("#social")!;
@@ -634,9 +640,16 @@ function start(svg: SVGSVGElement): void {
     for (const stop of haloStops) stop.setAttribute("stop-color", color);
     for (const stop of bloomStops) stop.setAttribute("stop-color", color);
     // 수면에 비친 빛도 그 빛이다 — 달길과 물비늘이 광원 색을 따라간다.
-    // 중심 알(glade-core)은 빛구멍 한가운데처럼 흰 채로 둔다.
     for (const stop of gladeStops) stop.setAttribute("stop-color", color);
     gladeGlintsG.setAttribute("fill", color);
+    // 빛구멍 속과 수면에 닿은 중심 알 — 밝아서 색이 씻긴 만큼만 배어난다.
+    for (const node of washed) {
+      const pale = angleColorWashed(angle, Number(node.dataset.wash));
+      node.setAttribute(
+        node.tagName === "stop" ? "stop-color" : "fill",
+        pale,
+      );
+    }
 
     const now = performance.now() / 1000;
     const dt = lastT ? Math.min(0.05, now - lastT) : 0.016;

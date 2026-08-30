@@ -222,10 +222,14 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		data-d-max={postsData.dMax}
 	>
 		<defs>
+			{/*
+			  빛구멍 속. data-wash = 광원 색을 흰빛에 섞는 비율(main-stage.ts가 매 프레임 칠한다).
+			  적혀 있는 색은 쉬는 색 — 커피 호박을 각각 그만큼 바래게 한 값과 같다.
+			*/}
 			<radialGradient id="hap-light">
-				<stop offset="0%" stop-color="#fffdf4"></stop>
-				<stop offset="70%" stop-color="#fffdf4"></stop>
-				<stop offset="100%" stop-color="#eeddb8"></stop>
+				<stop offset="0%" stop-color="#fffdf4" data-wash="0.95"></stop>
+				<stop offset="70%" stop-color="#fffdf4" data-wash="0.95"></stop>
+				<stop offset="100%" stop-color="#eeddb8" data-wash="0.59"></stop>
 			</radialGradient>
 			<radialGradient id="hap-bloom">
 				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.45"></stop>
@@ -340,6 +344,7 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		*/}
 		<g id="glade">
 			<path id="glade-col" d="" fill="url(#gladecol)" filter="url(#soften)"></path>
+			{/* 빛구멍 한가운데가 수면에 닿은 자리 — 그 색을 그대로 받는다(data-wash). */}
 			<ellipse
 				id="glade-core"
 				cx="350"
@@ -347,6 +352,7 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 				rx="24"
 				ry="4.5"
 				fill="#fffdf4"
+				data-wash="0.95"
 				opacity="0.45"
 				filter="url(#soften)"></ellipse>
 			<g id="glade-bands">
