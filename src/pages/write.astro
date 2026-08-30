@@ -1,0 +1,813 @@
+---
+/**
+ * 쓰기 화면 — 브라우저에서 글 한 편을 짓는다.
+ *
+ * 정적 사이트라 **파일을 쓰지는 못한다.** 대신 파이프라인이 쓰는 바로 그 함수들로
+ * 슬러그·읽는 시간·지문·"모델이 읽는 글"을 실시간으로 계산해 보여주고, 완성된
+ * 마크다운을 내려받기·복사·GitHub 새 파일 화면으로 넘긴다. 화면이 말하는 값과
+ * 빌드가 계산하는 값이 갈리지 않게 계산은 전부 `src/lib`·`scripts/lib`에서 빌려온다.
+ *
+ * **좌표는 여기서 안 박힌다.** 웹에서 커밋해도 벡터는 로컬에서 한 번 떠야 한다
+ * (`npm run embed`) — CI의 `embed:check`가 그걸 붙잡는 안전장치다.
+ */
+import { getCollection } from 'astro:content';
+import BaseHead from '../components/BaseHead.astro';
+import { categories } from '../config/categories.ts';
+import { SITE_TITLE } from '../consts';
+import coordinates from '../data/coordinates.json';
+import vectors from '../data/vectors.json';
+import { HOLE } from '../lib/stage/list.ts';
+import '../styles/stage.css';
+
+/** 리포 주소 — GitHub 새 파일·편집 화면으로 넘길 때 쓴다. */
+const REPO = 'ollybaysion/ollybaysion.github.io';
+const BRANCH = 'main';
+
+const posts = (await getCollection('blog'))
+	.map((entry) => ({
+		slug: entry.id,
+		title: entry.data.title,
+		date: entry.data.date.toISOString().slice(0, 10),
+		category: entry.data.category,
+		tags: entry.data.tags ?? [],
+		series: entry.data.series ?? '',
+		episode: entry.data.episode ?? null,
+		description: entry.data.description ?? '',
+		body: entry.body ?? '',
+	}))
+	.sort((a, b) => b.date.localeCompare(a.date) || a.slug.localeCompare(b.slug));
+
+/** 원장에 자리가 박힌 슬러그 · 벡터를 뜬 시점의 지문. 경고를 띄우는 근거다. */
+const placed = Object.fromEntries(
+	Object.entries(coordinates.entries).map(([slug, entry]) => [slug, entry.angle]),
+);
+const fingerprints = Object.fromEntries(
+	Object.entries(vectors.entries as Record<string, { source: string }>).map(([slug, entry]) => [
+		slug,
+		entry.source,
+	]),
+);
+
+/**
+ * 카테고리는 사람이 고르는 한 칸이다 — 호(각도의 범위)만 정하고, 호 안의 자리는
+ * 임베딩이 계산한다. 그래서 화면에서도 목록 한 줄로 둔다.
+ */
+const names = Object.keys(categories);
+
+const data = {
+	repo: REPO,
+	branch: BRANCH,
+	posts,
+	placed,
+	fingerprints,
+	categories: Object.fromEntries(
+		Object.entries(categories).map(([name, def]) => [
+			name,
+			{ arc: def.arc, base: def.color.base, deep: def.color.deep },
+		]),
+	),
+};
+---
+
+<!doctype html>
+<html lang="ko">
+	<head>
+		<BaseHead title={`쓰기 — ${SITE_TITLE}`} description="글 한 편을 짓는 화면." />
+		<!-- 도구 화면이다. 검색에도 사이트맵에도 올리지 않는다. -->
+		<meta name="robots" content="noindex, nofollow" />
+	</head>
+	<body class="write-page">
+		<div class="write" data-write>
+			{/* 본문에 </script>가 들어 있어도 판이 깨지지 않게 `<`를 이스케이프해서 싣는다. */}
+			<script
+				type="application/json"
+				data-write-data
+				set:html={JSON.stringify(data).replace(/</g, '\\u003c')}
+			/>
+
+			<header class="w-top">
+				<svg class="w-hole" viewBox="0 0 700 44" aria-hidden="true">
+					<defs>
+						<radialGradient id="wLight">
+							<stop offset="0%" stop-color="#fffdf4"></stop>
+							<stop offset="70%" stop-color="#fffdf4"></stop>
+							<stop offset="100%" stop-color="#eeddb8"></stop>
+						</radialGradient>
+						<radialGradient id="wBloom">
+							<stop offset="0%" stop-color="#d9a154" stop-opacity="0.4"></stop>
+							<stop offset="45%" stop-color="#d9a154" stop-opacity="0.14"></stop>
+							<stop offset="100%" stop-color="#d9a154" stop-opacity="0"></stop>
+						</radialGradient>
+					</defs>
+					<circle cx={HOLE.cx} cy="8" r="150" fill="url(#wBloom)"></circle>
+					<circle cx={HOLE.cx} cy="8" r="52" fill="url(#wLight)" opacity="0.9"></circle>
+				</svg>
+
+				<a class="w-back" href="/">← 메인</a>
+				<h1 class="w-name">쓰기</h1>
+
+				<div class="w-top-right">
+					<label class="w-sr" for="w-open">글 고르기</label>
+					<select id="w-open" data-open>
+						<option value="">새 글</option>
+						{posts.map((post) => <option value={post.slug}>{post.title}</option>)}
+					</select>
+					<button type="button" class="w-icon w-narrow-only" data-view-toggle title="미리보기 열고 닫기">
+						<span data-view-icon>◨</span>
+					</button>
+					<button type="button" class="w-icon" data-theme-toggle title="밝기 바꾸기">
+						<span data-theme-icon>☾</span>
+					</button>
+				</div>
+			</header>
+
+			<main class="w-body">
+				<section class="w-edit">
+					<div class="w-meta">
+						<div class="w-field w-span">
+							<label for="w-title">제목</label>
+							<input id="w-title" data-f="title" type="text" />
+						</div>
+
+						<div class="w-field">
+							<label for="w-date">날짜</label>
+							<input id="w-date" data-f="date" type="date" />
+						</div>
+
+						<div class="w-field">
+							<label for="w-category">카테고리</label>
+							<select id="w-category" data-f="category">
+								{names.map((name) => <option value={name}>{name}</option>)}
+							</select>
+						</div>
+
+						<div class="w-field w-span">
+							<label for="w-desc">소개 한 줄</label>
+							<input id="w-desc" data-f="description" type="text" placeholder="목록에 걸리는 한 줄" />
+						</div>
+
+						<div class="w-field w-span">
+							<label for="w-tags">태그 <span class="w-note">쉼표로 나눈다</span></label>
+							<input id="w-tags" data-f="tags" type="text" placeholder="에스프레소, 탬핑" />
+							<div class="w-tagline" data-tag-preview></div>
+						</div>
+
+						<div class="w-field">
+							<label for="w-series">시리즈 <span class="w-note">나중에 정해도 된다</span></label>
+							<input id="w-series" data-f="series" type="text" list="w-series-list" placeholder="없음" />
+							<datalist id="w-series-list">
+								{[...new Set(posts.map((post) => post.series).filter(Boolean))].map((name) => (
+									<option value={name}></option>
+								))}
+							</datalist>
+						</div>
+
+						<div class="w-field">
+							<label for="w-episode">회차</label>
+							<input id="w-episode" data-f="episode" type="number" min="1" step="1" placeholder="날짜순" />
+						</div>
+					</div>
+
+					<div class="w-field w-grow">
+						<label for="w-md">본문</label>
+						<textarea id="w-md" data-f="body" spellcheck="false" placeholder="여기서부터."></textarea>
+					</div>
+				</section>
+
+				<section class="w-side">
+					<div class="w-tabs" role="tablist">
+						<button type="button" class="w-tab" role="tab" data-tab="preview">미리보기</button>
+						<button type="button" class="w-tab" role="tab" data-tab="source">원문 .md</button>
+						<button type="button" class="w-tab" role="tab" data-tab="embed">모델이 읽는 글</button>
+					</div>
+
+					<div class="w-pane" data-pane="preview">
+						<article class="w-prose" data-preview></article>
+					</div>
+					<div class="w-pane" data-pane="source" hidden>
+						<pre class="w-raw" data-source></pre>
+					</div>
+					<div class="w-pane" data-pane="embed" hidden>
+						<p class="w-pane-note">
+							임베딩에 실제로 들어가는 글이다 — 제목 · 태그 · 소개 · 마크다운을 걷어낸 본문.
+							이 글자가 바뀌면 지문이 바뀐다.
+						</p>
+						<pre class="w-raw" data-embed></pre>
+					</div>
+				</section>
+			</main>
+
+			<div class="w-warn" data-warn hidden></div>
+
+			<footer class="w-foot">
+				<div class="w-stats">
+					<span class="w-stat"><b data-stat-slug>—</b><i>슬러그</i></span>
+					<span class="w-stat"><b data-stat-chars>0</b><i>자</i></span>
+					<span class="w-stat"><b data-stat-min>1</b><i>분</i></span>
+					<span class="w-stat"><b data-stat-fp>—</b><i>지문</i></span>
+					<span class="w-saved" data-saved></span>
+				</div>
+
+				<div class="w-acts">
+					<button type="button" class="w-btn" data-act="download">.md 내려받기</button>
+					<button type="button" class="w-btn" data-act="copy">마크다운 복사</button>
+					<button type="button" class="w-btn" data-act="command">npm 명령 복사</button>
+					<a class="w-btn w-btn-go" data-act="github" href="#" target="_blank" rel="noopener">
+						GitHub에서 커밋
+					</a>
+					<button type="button" class="w-btn w-btn-quiet" data-act="reset">비우기</button>
+				</div>
+			</footer>
+		</div>
+
+		<script>
+			import '../scripts/write-screen.ts';
+		</script>
+
+		<style is:global>
+			/*
+			  쓰기 화면의 색·글꼴은 무대에서 가져온다. 다만 **여기만 밝기를 고를 수 있다** —
+			  읽는 화면이 아니라 오래 들여다보며 글자를 치는 화면이라서다.
+			  라이트 팔레트는 정본의 빛구멍(#fffdf4 → #eeddb8)과 천(#cfc9bd) 계열에서 끌어냈다.
+			*/
+			:root {
+				--w-bg: #131316;
+				--w-panel: #17171b;
+				--w-field-bg: #1c1c21;
+				--w-ink: #e8e6e1;
+				--w-dim: #d8d5cd;
+				--w-muted: #8f8c85;
+				--w-rule: #2a2a2e;
+				--w-edge: #26262b;
+				--w-accent: #5b8def;
+			}
+
+			/*
+			  라이트는 이 화면에만 있다. 밝기는 `<html>`에 걸어야 문서 바탕까지 같이
+			  바뀐다 — 토큰을 `.write`에 두면 CSS 변수가 위로 올라가지 않아 바탕이 남는다.
+			*/
+			:root[data-write-theme='light'] {
+				--w-bg: #ede7da;
+				--w-panel: #fbf8f1;
+				--w-field-bg: #fffdf7;
+				--w-ink: #24221d;
+				--w-dim: #3b3830;
+				--w-muted: #7c776b;
+				--w-rule: #ddd6c5;
+				--w-edge: #d5cdba;
+			}
+
+			html:has(body.write-page) {
+				background: var(--w-bg);
+			}
+
+			body.write-page {
+				margin: 0;
+				height: 100dvh;
+				overflow: hidden;
+				background: var(--w-bg);
+				color: var(--w-ink);
+				font-family: var(--stage-sans);
+			}
+
+			.write {
+				display: flex;
+				flex-direction: column;
+				height: 100dvh;
+				background: var(--w-bg);
+				color: var(--w-ink);
+			}
+
+			/* ── 머리 ─────────────────────────────────────────── */
+			.w-top {
+				position: relative;
+				flex: none;
+				display: flex;
+				align-items: center;
+				gap: 16px;
+				padding: 14px 22px 12px 22px;
+				border-bottom: 1px solid var(--w-rule);
+				background: var(--w-bg);
+			}
+
+			.w-hole {
+				position: absolute;
+				top: -14px;
+				left: 50%;
+				width: 700px;
+				max-width: 100%;
+				transform: translateX(-50%);
+				pointer-events: none;
+				opacity: 0.5;
+			}
+
+			:root[data-write-theme='light'] .w-hole {
+				opacity: 0.75;
+			}
+
+			.w-back,
+			.w-name,
+			.w-top-right {
+				position: relative;
+			}
+
+			.w-back {
+				font-family: var(--stage-mono);
+				font-size: 11.5px;
+				color: var(--w-muted);
+			}
+
+			.w-back:hover {
+				color: var(--w-ink);
+			}
+
+			.w-name {
+				margin: 0;
+				font-family: var(--stage-serif);
+				font-size: 17px;
+				font-weight: 700;
+				letter-spacing: 0.02em;
+			}
+
+			.w-top-right {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				margin-left: auto;
+			}
+
+			.w-sr {
+				position: absolute;
+				width: 1px;
+				height: 1px;
+				overflow: hidden;
+				clip-path: inset(50%);
+				white-space: nowrap;
+			}
+
+			.w-icon {
+				width: 30px;
+				height: 30px;
+				border: 1px solid var(--w-edge);
+				border-radius: 4px;
+				background: transparent;
+				color: var(--w-muted);
+				font-size: 13px;
+				cursor: pointer;
+			}
+
+			.w-icon:hover {
+				color: var(--w-ink);
+				border-color: var(--w-muted);
+			}
+
+			/* ── 몸통 ─────────────────────────────────────────── */
+			.w-body {
+				flex: 1;
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+				min-height: 0;
+			}
+
+			.w-edit {
+				display: flex;
+				flex-direction: column;
+				min-height: 0;
+				padding: 18px 22px 14px 22px;
+				overflow-y: auto;
+				border-right: 1px solid var(--w-rule);
+			}
+
+			.w-meta {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 14px 18px;
+				padding-bottom: 18px;
+				margin-bottom: 16px;
+				border-bottom: 1px solid var(--w-rule);
+			}
+
+			.w-span {
+				grid-column: 1 / -1;
+			}
+
+			.w-field {
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+				min-width: 0;
+			}
+
+			.w-grow {
+				flex: 1;
+				min-height: 0;
+			}
+
+			.w-field label {
+				font-family: var(--stage-mono);
+				font-size: 10.5px;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				color: var(--w-muted);
+			}
+
+			.w-note {
+				text-transform: none;
+				letter-spacing: 0;
+				opacity: 0.72;
+			}
+
+			.write input,
+			.write select,
+			.write textarea {
+				box-sizing: border-box;
+				width: 100%;
+				padding: 8px 10px;
+				border: 1px solid var(--w-edge);
+				border-radius: 4px;
+				background: var(--w-field-bg);
+				color: var(--w-ink);
+				font-family: var(--stage-sans);
+				font-size: 14px;
+				line-height: 1.6;
+			}
+
+			.write input:focus,
+			.write select:focus,
+			.write textarea:focus {
+				outline: none;
+				border-color: var(--w-accent);
+			}
+
+			.write input::placeholder,
+			.write textarea::placeholder {
+				color: var(--w-muted);
+				opacity: 0.6;
+			}
+
+			#w-title {
+				font-family: var(--stage-serif);
+				font-size: 19px;
+				font-weight: 600;
+			}
+
+			#w-md {
+				flex: 1;
+				min-height: 320px;
+				resize: none;
+				font-size: 14.5px;
+				line-height: 1.85;
+				color: var(--w-dim);
+			}
+
+			.w-tagline {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 6px;
+				min-height: 0;
+				font-family: var(--stage-mono);
+				font-size: 10.5px;
+				color: var(--w-muted);
+			}
+
+			.w-tagline span {
+				padding: 1px 7px;
+				border: 1px solid var(--w-edge);
+				border-radius: 999px;
+			}
+
+			/* ── 옆판 ─────────────────────────────────────────── */
+			.w-side {
+				display: flex;
+				flex-direction: column;
+				min-height: 0;
+				background: var(--w-panel);
+			}
+
+			.w-tabs {
+				flex: none;
+				display: flex;
+				gap: 2px;
+				padding: 10px 22px 0 22px;
+				border-bottom: 1px solid var(--w-rule);
+			}
+
+			.w-tab {
+				padding: 7px 12px;
+				border: 0;
+				border-bottom: 2px solid transparent;
+				background: transparent;
+				color: var(--w-muted);
+				font-family: var(--stage-mono);
+				font-size: 11.5px;
+				cursor: pointer;
+			}
+
+			.w-tab:hover {
+				color: var(--w-ink);
+			}
+
+			.w-tab[aria-selected='true'] {
+				color: var(--w-ink);
+				border-bottom-color: var(--w-accent);
+			}
+
+			.w-pane {
+				flex: 1;
+				min-height: 0;
+				overflow-y: auto;
+				padding: 22px 22px 40px 22px;
+			}
+
+			.w-pane-note {
+				margin: 0 0 14px 0;
+				padding-bottom: 12px;
+				border-bottom: 1px solid var(--w-rule);
+				font-size: 12px;
+				line-height: 1.7;
+				color: var(--w-muted);
+			}
+
+			.w-raw {
+				margin: 0;
+				font-family: var(--stage-mono);
+				font-size: 12px;
+				line-height: 1.75;
+				color: var(--w-dim);
+				white-space: pre-wrap;
+				word-break: break-word;
+			}
+
+			/* 미리보기 — 글 화면(PostScreen)의 본문 규칙 그대로다. */
+			.w-prose {
+				max-width: 640px;
+				font-size: 15px;
+				line-height: 1.9;
+				color: var(--w-dim);
+			}
+
+			.w-prose > :first-child {
+				margin-top: 0;
+			}
+
+			.w-prose p {
+				margin: 0 0 26px 0;
+			}
+
+			.w-prose h1,
+			.w-prose h2 {
+				margin: 34px 0 16px 0;
+				font-family: var(--stage-serif);
+				font-size: 19px;
+				font-weight: 600;
+				color: var(--w-ink);
+			}
+
+			.w-prose h3,
+			.w-prose h4 {
+				margin: 28px 0 12px 0;
+				font-family: var(--stage-serif);
+				font-size: 16px;
+				font-weight: 600;
+				color: var(--w-ink);
+			}
+
+			.w-prose blockquote {
+				margin: 0 0 26px 0;
+				padding: 4px 0 4px 20px;
+				border-left: 2px solid var(--w-accent);
+				color: var(--w-muted);
+			}
+
+			.w-prose ul,
+			.w-prose ol {
+				margin: 0 0 26px 0;
+				padding-left: 22px;
+			}
+
+			.w-prose li {
+				margin: 0 0 6px 0;
+			}
+
+			.w-prose a {
+				color: var(--w-accent);
+				border-bottom: 1px solid color-mix(in srgb, var(--w-accent) 40%, transparent);
+			}
+
+			.w-prose img {
+				display: block;
+				width: 100%;
+				height: auto;
+				border: 1px solid var(--w-edge);
+				border-radius: 4px;
+			}
+
+			.w-prose :not(pre) > code {
+				padding: 1px 5px;
+				border-radius: 3px;
+				background: var(--w-field-bg);
+				font-family: var(--stage-mono);
+				font-size: 0.88em;
+			}
+
+			.w-prose pre {
+				margin: 0 0 26px 0;
+				padding: 14px 18px;
+				overflow-x: auto;
+				border: 1px solid var(--w-edge);
+				border-radius: 4px;
+				background: var(--w-field-bg);
+				font-size: 13px;
+				line-height: 1.7;
+			}
+
+			.w-prose pre code {
+				font-family: var(--stage-mono);
+			}
+
+			.w-prose hr {
+				margin: 34px 0;
+				border: 0;
+				border-top: 1px solid var(--w-rule);
+			}
+
+			.w-prose table {
+				width: 100%;
+				margin: 0 0 26px 0;
+				border-collapse: collapse;
+				font-size: 13.5px;
+			}
+
+			.w-prose th,
+			.w-prose td {
+				padding: 8px 10px;
+				border-bottom: 1px solid var(--w-rule);
+				text-align: left;
+			}
+
+			.w-prose-empty {
+				color: var(--w-muted);
+				font-style: italic;
+			}
+
+			/* ── 경고 ─────────────────────────────────────────── */
+			.w-warn {
+				flex: none;
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+				padding: 11px 22px;
+				border-top: 1px solid var(--w-rule);
+				background: color-mix(in srgb, #c98a5a 10%, var(--w-bg));
+				font-size: 12.5px;
+				line-height: 1.65;
+				color: var(--w-dim);
+			}
+
+			.w-warn b {
+				font-family: var(--stage-mono);
+				font-size: 11px;
+				font-weight: 500;
+				color: #c98a5a;
+			}
+
+			/* ── 발 ───────────────────────────────────────────── */
+			.w-foot {
+				flex: none;
+				display: flex;
+				align-items: center;
+				gap: 18px;
+				padding: 12px 22px;
+				border-top: 1px solid var(--w-rule);
+				background: var(--w-bg);
+			}
+
+			.w-stats {
+				display: flex;
+				align-items: baseline;
+				gap: 16px;
+				min-width: 0;
+				font-family: var(--stage-mono);
+				font-size: 11px;
+				color: var(--w-muted);
+			}
+
+			.w-stat {
+				display: inline-flex;
+				align-items: baseline;
+				gap: 5px;
+				min-width: 0;
+			}
+
+			.w-stat b {
+				max-width: 32ch;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				font-weight: 500;
+				color: var(--w-dim);
+			}
+
+			.w-stat i {
+				font-style: normal;
+				opacity: 0.7;
+			}
+
+			.w-saved {
+				opacity: 0.75;
+			}
+
+			.w-acts {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin-left: auto;
+			}
+
+			.w-btn {
+				padding: 7px 12px;
+				border: 1px solid var(--w-edge);
+				border-radius: 4px;
+				background: transparent;
+				color: var(--w-dim);
+				font-family: var(--stage-mono);
+				font-size: 11.5px;
+				cursor: pointer;
+				transition:
+					border-color 0.18s ease,
+					color 0.18s ease;
+			}
+
+			.w-btn:hover {
+				border-color: var(--w-accent);
+				color: var(--w-ink);
+			}
+
+			.w-btn[aria-disabled='true'] {
+				opacity: 0.4;
+				pointer-events: none;
+			}
+
+			.w-btn-go {
+				border-color: color-mix(in srgb, var(--w-accent) 55%, var(--w-edge));
+				color: var(--w-ink);
+			}
+
+			.w-btn-quiet {
+				opacity: 0.6;
+			}
+
+			/* 미리보기 토글은 한 칸으로 접히는 좁은 화면에서만 쓸모가 있다. */
+			.w-narrow-only {
+				display: none;
+			}
+
+			/* ── 좁은 화면 ─────────────────────────────────────── */
+			@media (max-width: 900px) {
+				.w-narrow-only {
+					display: block;
+				}
+
+				.w-body {
+					grid-template-columns: minmax(0, 1fr);
+				}
+
+				.w-edit {
+					border-right: 0;
+				}
+
+				.w-side {
+					display: none;
+				}
+
+				.write[data-view='side'] .w-edit {
+					display: none;
+				}
+
+				.write[data-view='side'] .w-side {
+					display: flex;
+				}
+
+				.w-meta {
+					grid-template-columns: 1fr;
+				}
+
+				.w-foot {
+					flex-direction: column;
+					align-items: stretch;
+					gap: 10px;
+				}
+
+				.w-acts {
+					margin-left: 0;
+				}
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				.write * {
+					transition: none !important;
+				}
+			}
+		</style>
+	</body>
+</html>
