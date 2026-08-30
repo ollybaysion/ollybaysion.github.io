@@ -14,6 +14,7 @@ import {
   nearestCategory,
 } from "../lib/stage/palette.ts";
 import { HORIZON_Y } from "../lib/stage/sea.ts";
+import { mountFlower } from "./flower-scene.ts";
 import { mountSea } from "./sea-scene.ts";
 
 /** 정본 좌표계. 세로는 이 값을 그대로 쓰고, 가로만 화면 비율에 맞춰 벌어진다. */
@@ -173,6 +174,7 @@ function start(svg: SVGSVGElement): void {
   const bands = [...svg.querySelectorAll<SVGLineElement>(".band")];
   // 바다와 그 위의 윤슬 — 글 화면 꼬리와 같은 장면이다(sea-scene.ts).
   const seaScene = mountSea(svg);
+  const flower = mountFlower(svg);
 
   /**
    * 무대를 뷰포트에 맞춘다.
@@ -221,6 +223,9 @@ function start(svg: SVGSVGElement): void {
       height: seaH,
       px: box.height / h,
     });
+
+    // 배롱나무 — 가지 길이는 정본 그대로 두고, 벽이 화면 끝에 오도록 그루째 옮긴다.
+    flower?.resize({ left, width: w });
 
     // CLI ❯와 입력은 화면 왼쪽 끝에 붙는다. 파도 목록 행은 가운데 열에 그대로 남는다.
     // 정본 x가 이미 52(EDGE)라 화면 왼쪽 끝만큼만 밀면 된다.
@@ -569,7 +574,11 @@ function start(svg: SVGSVGElement): void {
     phase += dt * 0.9;
 
     // 모션을 줄인 화면에서는 layout()이 그린 정지화 한 장을 그대로 둔다.
-    if (seaScene && !seaScene.reduceMotion) seaScene.render(now);
+    if (seaScene && !seaScene.reduceMotion) {
+      const frame = seaScene.render(now);
+      // 꽃은 바다와 같은 바람 하나를 받는다 — 세기도 방향도 한 하늘에서 나온다.
+      flower?.render(now, dt, frame.wind, frame.dir);
+    }
 
     const ps = panelState;
     if (ps.open) {

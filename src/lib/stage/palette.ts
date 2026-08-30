@@ -19,6 +19,14 @@ import {
 } from "../coords/arc.ts";
 import type { Arc } from "../coords/types.ts";
 
+/**
+ * 무대 먹선 — `#e8e6e1`의 채널만. `rgba(INK,a)`로 끼워 쓴다.
+ *
+ * 색이 아니라 잉크다. 각도에서 나오는 빛(아래 `angleColor`)과 달리 이건 무엇을 그리든
+ * 같다 — 파도도 배롱나무도 같은 붓을 든다.
+ */
+export const INK = '232,230,225';
+
 export interface Rgb {
   r: number;
   g: number;
