@@ -44,6 +44,15 @@ const CLI_BOTTOM = 514;
 const PANEL_TOP = 524;
 /** 파도 능선이 앉는 y. */
 const WAVE_Y = 536;
+/**
+ * 파도 목록의 발치 — "목록 자세히"(762) 아래 한 뼘.
+ *
+ * 낮은 창에서는 이 발치가 화면 밖으로 나간다. 그럴 때 목록은 제자리를 고집하지 않고
+ * 통째로 위로 올라앉는다(`panelLift`). 올라앉는 폭은 화면 높이가 정하는데,
+ * SCENE_MIN_H·KEEP_TOP이 h≥500 · minY≤125을 보장하니 능선이 379보다 위로는 못 온다 —
+ * 빛구멍 아래(330)다. 목록이 올라와도 빛구멍은 가리지 않는다.
+ */
+const PANEL_FOOT = 782;
 
 /** 메타볼 상수 — 확정값이라 건드리지 않는다. */
 const R1 = 95;
@@ -70,6 +79,41 @@ const HIT_R_TOUCH = 16;
  */
 const BEAM_FADE = 40;
 
+/**
+ * 무대 한 단위가 화면에서 가져야 할 최소 픽셀.
+ *
+ * 좁은 화면에서 정본 폭(700)을 통째로 담으면 한 단위가 0.56px까지 줄어 12단위 제사가
+ * 6.7px이 된다 — 장면이 아니라 축소판이다. 그래서 폰에서는 **벌리는 대신 잘라 확대한다**.
+ * 0.92는 제사가 11px, 파도 목록 제목이 12px쯤 서는 자리다.
+ */
+const MIN_UNIT_PX = 0.92;
+/**
+ * 아무리 확대해도 이보다 좁히지 않는다 — 글 점이 사는 원이 통째로 들어와야 무대다.
+ * 지름 390(RADIUS_MAX 195)에 좌우 여백 20씩.
+ */
+const SCENE_MIN_W = 430;
+/** 세로도 같다 — 빛구멍·CLI 줄·물가 한 자락이 한 화면에 남을 최소 높이. */
+const SCENE_MIN_H = 500;
+/**
+ * 창이 정본(790)보다 낮을 때 화면에서 밀려나면 안 되는 띠.
+ *
+ * 위는 빛구멍 꼭대기(235−95) 위 한 뼘, 아래는 파도 능선 조금 아래다. 가운데를 맞추면
+ * 가로로 누운 화면에서 빛구멍 정수리가 잘린다 — 장면의 한가운데가 아니라 이 띠를 맞춘다.
+ */
+const KEEP_TOP = 125;
+const KEEP_BOTTOM = 560;
+
+/**
+ * 손가락만 있는 화면인가.
+ *
+ * 커서가 없으면 호버로 켜지는 것이 영영 켜지지 않는다 — 글 점이 하나도 안 보이는 무대가
+ * 폰에서 벌어진 일이다. 점은 늘 켜 두고, 이름표는 접는다(잘라 확대한 무대에서는 화면
+ * 밖으로 나간다). 제목은 눌러서 올라오는 파도 목록이 읽어 준다.
+ */
+const TOUCH = window.matchMedia("(hover: none)").matches;
+/** 손가락 화면에서 점이 늘 지니는 밝기 — 별처럼 켜 둔 자리. */
+const DOT_REST = 0.5;
+
 interface Post {
   angle: number;
   slug: string;
@@ -82,6 +126,8 @@ interface Post {
 
 interface Row {
   link: SVGAElement;
+  /** 행 전체를 받는 판 — 글자만으로는 손가락이 겨냥할 자리가 없다. */
+  hit: SVGRectElement;
   dot: SVGCircleElement;
   title: SVGTextElement;
   distance: SVGTextElement;
@@ -155,6 +201,7 @@ function start(svg: SVGSVGElement): void {
   const waveFill = svg.querySelector<SVGPathElement>("#p-wavefill")!;
   const waveLine = svg.querySelector<SVGPathElement>("#p-waveline")!;
   const pName = svg.querySelector<SVGTextElement>("#p-name")!;
+  const pClose = svg.querySelector<SVGTextElement>("#p-close")!;
   const pMore = svg.querySelector<SVGAElement>("#p-more")!;
   const pMoreText = pMore.querySelector<SVGTextElement>("text")!;
   /** 목록 화면이 있는 카테고리(MainStage가 적어 둔다). */
@@ -169,6 +216,7 @@ function start(svg: SVGSVGElement): void {
   const rows: Row[] = [...svg.querySelectorAll<SVGAElement>(".prow")].map(
     (link) => ({
       link,
+      hit: link.querySelector<SVGRectElement>(".prow-hit")!,
       dot: link.querySelector("circle")!,
       title: link.querySelector<SVGTextElement>(".pt")!,
       distance: link.querySelector<SVGTextElement>(".pd")!,
@@ -177,6 +225,7 @@ function start(svg: SVGSVGElement): void {
 
   // 화면 비율만큼 좌우로 벌어진 무대. layout()이 갱신한다.
   // bandL·bandR = 화면에 그어진 프레임 세로선, 곧 좌·가운데·우 영역의 경계다.
+  // colL·colR = 파도 목록이 서는 열의 좌우 끝. 좁은 화면에서는 화면 안으로 당겨진다.
   const view = {
     minX: 0,
     minY: 0,
@@ -184,8 +233,15 @@ function start(svg: SVGSVGElement): void {
     h: VIEW_H,
     bandL: 0,
     bandR: VIEW_W,
+    colL: EDGE,
+    colR: VIEW_W - EDGE,
   };
+  /** 초상이 물러난 화면인가 — 물러났으면 매 프레임 흔들 것도 없다. */
+  let flowerOff = false;
+  /** 낮은 창에서 파도 목록이 올라앉는 폭(음수). 정본 높이가 나오는 화면에서는 0이다. */
+  let panelLift = 0;
 
+  const flowerG = svg.querySelector<SVGGElement>("#flower");
   const bleeds = [...svg.querySelectorAll<SVGLineElement>(".bleed")];
   const covers = [...svg.querySelectorAll<SVGRectElement>(".cover")];
   const bands = [...svg.querySelectorAll<SVGLineElement>(".band")];
@@ -197,17 +253,30 @@ function start(svg: SVGSVGElement): void {
    * 무대를 뷰포트에 맞춘다.
    * 가로가 넉넉하면 좌우로 벌리고(세로 좌표계는 정본 그대로), 세로로 긴 화면에서는
    * 폭을 700에 묶고 위아래로 벌려 장면을 가운데 놓는다. 어느 쪽이든 원은 원으로 남는다.
+   *
+   * 작은 화면에서는 한 단계가 더 있다. 담을 수 있는 만큼 다 담으면 한 단위가 0.5px로
+   * 줄어 무대가 축소판이 된다 — 그래서 **읽히는 자보다 작아지지 않는 선에서 잘라낸다**
+   * (`MIN_UNIT_PX`). 잘라낸 자리에서는 좌측 명함도 초상도 물러나고(data-min-w),
+   * 빛구멍과 글 점, CLI 줄, 물가만 남는다. 큰 화면에서는 이 항이 걸리지 않는다.
    */
   function layout(): void {
     const box = svg.getBoundingClientRect();
     if (box.width === 0 || box.height === 0) return;
     const aspect = box.width / box.height;
-    const w = Math.max(VIEW_W, VIEW_H * aspect);
+    const spread = Math.max(VIEW_W, VIEW_H * aspect);
+    const w = Math.min(
+      spread,
+      Math.max(box.width / MIN_UNIT_PX, SCENE_MIN_W, SCENE_MIN_H * aspect),
+    );
     const h = w / aspect;
     view.w = w;
     view.h = h;
     view.minX = VIEW_W / 2 - w / 2;
-    view.minY = (VIEW_H - h) / 2;
+    // 가운데 맞춤이 기본이고, 낮은 창에서만 지켜야 할 띠 쪽으로 밀린다.
+    view.minY = Math.max(
+      KEEP_BOTTOM - h,
+      Math.min(KEEP_TOP, (VIEW_H - h) / 2),
+    );
     svg.setAttribute("viewBox", `${view.minX} ${view.minY} ${w} ${h}`);
 
     const left = view.minX;
@@ -276,6 +345,28 @@ function start(svg: SVGSVGElement): void {
     // 물러나는 기준은 실제 글자 길이에서 나온다(MainStage의 needW).
     for (const el of retreating) {
       el.classList.toggle("is-hidden", w < Number(el.dataset.minW));
+    }
+    flowerOff = flowerG?.classList.contains("is-hidden") ?? false;
+
+    /*
+      파도 목록의 열 — 화면 안쪽으로 당긴다.
+      정본 x(52 · 648)는 700 폭 안의 자리다. 잘라 확대한 무대에서는 그 자리가 화면
+      밖이라 목록이 통째로 사라진다. 넓은 화면에서는 정본 자리가 이미 안쪽이라
+      아무 일도 일어나지 않는다.
+    */
+    view.colL = Math.max(EDGE, left + EDGE);
+    view.colR = Math.min(VIEW_W - EDGE, right - EDGE);
+    // 발치가 화면 밖이면 목록 전체가 그만큼 올라앉는다.
+    panelLift = Math.min(0, view.minY + h - PANEL_FOOT);
+    pName.setAttribute("x", view.colL.toFixed(1));
+    pClose.setAttribute("x", view.colR.toFixed(1));
+    pMoreText.setAttribute("x", view.colL.toFixed(1));
+    for (const row of rows) {
+      row.hit.setAttribute("x", (view.colL - 12).toFixed(1));
+      row.hit.setAttribute("width", (view.colR - view.colL + 24).toFixed(1));
+      row.dot.setAttribute("cx", (view.colL + 4).toFixed(1));
+      row.title.setAttribute("x", (view.colL + 24).toFixed(1));
+      row.distance.setAttribute("x", view.colR.toFixed(1));
     }
   }
 
@@ -414,12 +505,12 @@ function start(svg: SVGSVGElement): void {
     }
 
     if (panelState.open) {
-      const panelTop = PANEL_TOP + panelState.y;
+      const panelTop = PANEL_TOP + panelState.y + panelLift;
       if (point.y > panelTop) {
-        // 패널 안 — "내리기 ↓"는 가운데 열 오른쪽 끝에 있고, 나머지 행은 링크가 직접 받는다.
+        // 패널 안 — "내리기 ↓"는 목록 열 오른쪽 끝에 있고, 나머지 행은 링크가 직접 받는다.
         if (
-          point.x > VIEW_W - EDGE - 96 &&
-          point.x < VIEW_W - EDGE + 12 &&
+          point.x > view.colR - 96 &&
+          point.x < view.colR + 12 &&
           point.y < panelTop + 62
         )
           panelState.open = false;
@@ -590,7 +681,11 @@ function start(svg: SVGSVGElement): void {
       if (target.over && Math.hypot(target.x - at.x, target.y - at.y) <= HIT_R) {
         onPost = true;
       }
-      let glow = Math.exp(-((dist / 90) ** 2)) * press.op;
+      // 손가락 화면에서는 켜 줄 커서가 없다 — 점이 늘 이만큼은 켜져 있다.
+      let glow = Math.max(
+        TOUCH ? DOT_REST : 0,
+        Math.exp(-((dist / 90) ** 2)) * press.op,
+      );
       if (beamOn) {
         // 빔 범위 안에 든 글도 함께 점등.
         let da = Math.abs(Math.atan2(post.y - CY, post.x - CX) - theta);
@@ -609,7 +704,7 @@ function start(svg: SVGSVGElement): void {
       post.dot.setAttribute("opacity", Math.min(1, glow * 1.15).toFixed(2));
       post.label.setAttribute(
         "opacity",
-        Math.max(0, (glow - 0.4) * 1.9).toFixed(2),
+        TOUCH ? "0" : Math.max(0, (glow - 0.4) * 1.9).toFixed(2),
       );
     }
     svg.classList.toggle("on-post", onPost);
@@ -636,7 +731,7 @@ function start(svg: SVGSVGElement): void {
     if (seaScene && !seaScene.reduceMotion) {
       const frame = seaScene.render(now);
       // 꽃은 바다와 같은 바람 하나를 받는다 — 세기도 방향도 한 하늘에서 나온다.
-      flower?.render(now, dt, frame.wind, frame.dir);
+      if (!flowerOff) flower?.render(now, dt, frame.wind, frame.dir);
     }
 
     const ps = panelState;
@@ -671,13 +766,14 @@ function start(svg: SVGSVGElement): void {
       pts.push(`${wx},${(WAVE_Y - A * (crest + chop)).toFixed(1)}`);
     }
     const edge = `M${pts.join(" L")}`;
-    const floor = view.minY + view.h;
+    // 물은 화면 바닥까지 찬다 — 패널이 얼마나 올라앉았든(py·panelLift) 그만큼 되민다.
+    const floor = view.minY + view.h - py - panelLift;
     waveFill.setAttribute(
       "d",
-      `${edge} L${waveTo},${floor} L${waveFrom},${floor} Z`,
+      `${edge} L${waveTo},${floor.toFixed(1)} L${waveFrom},${floor.toFixed(1)} Z`,
     );
     waveLine.setAttribute("d", edge);
-    panel.setAttribute("transform", `translate(0,${py.toFixed(1)})`);
+    panel.setAttribute("transform", `translate(0,${(py + panelLift).toFixed(1)})`);
     panel.setAttribute("opacity", ps.op.toFixed(3));
     panel.classList.toggle("is-open", ps.op > 0.5);
 
