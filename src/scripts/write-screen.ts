@@ -80,7 +80,7 @@ function start(root: HTMLElement): void {
 	const fields = {
 		title: q<HTMLInputElement>('[data-f="title"]'),
 		date: q<HTMLInputElement>('[data-f="date"]'),
-		category: q<HTMLSelectElement>('[data-f="category"]'),
+		category: q<HTMLInputElement>('[data-f="category"]'),
 		description: q<HTMLInputElement>('[data-f="description"]'),
 		tags: q<HTMLInputElement>('[data-f="tags"]'),
 		series: q<HTMLInputElement>('[data-f="series"]'),
@@ -126,7 +126,7 @@ function start(root: HTMLElement): void {
 		return {
 			title: fields.title.value.trim(),
 			date: fields.date.value || localDate(new Date()),
-			category: fields.category.value,
+			category: fields.category.value.trim(),
 			tags: fields.tags.value
 				.split(',')
 				.map((tag) => tag.trim())
@@ -223,6 +223,15 @@ function start(root: HTMLElement): void {
 			lines.push(['제목', '제목이 없으면 슬러그가 안 나온다 — 파일 이름을 못 짓는다.']);
 		} else if (slug === '') {
 			lines.push(['슬러그', `"${doc.title}"에서 슬러그로 남는 글자가 없다. 기호를 줄여볼 것.`]);
+		}
+
+		if (doc.category === '') {
+			lines.push(['카테고리', '카테고리가 없으면 각도를 못 정한다 — 빌드가 죽는다.']);
+		} else if (!(doc.category in data.categories)) {
+			lines.push([
+				'등록 안 된 카테고리',
+				`"${doc.category}"는 등록부에 없다. src/config/categories.json에 호와 색을 먼저 등록하지 않으면 빌드가 죽는다. 원은 이미 ${names.join('·')} 네 호로 다 차 있어서, 새 카테고리는 기존 호를 쪼개는 일이다 — 이미 박힌 글의 각도가 가리키는 주제가 달라진다.`,
+			]);
 		}
 
 		if (opened !== null && slug !== '' && slug !== opened) {
@@ -339,7 +348,8 @@ function start(root: HTMLElement): void {
 		fields.series.value = doc.series ?? '';
 		fields.episode.value = doc.episode === undefined || doc.episode === null ? '' : String(doc.episode);
 		fields.body.value = doc.body ?? '';
-		fields.category.value = names.includes(doc.category) ? doc.category : (names[0] ?? '');
+		// 등록 안 된 이름이라도 지운 채로 되돌리지 않는다 — 새 카테고리를 벼르는 중일 수 있다.
+		fields.category.value = doc.category?.trim() || (names[0] ?? '');
 	}
 
 	function blank(): Doc {
