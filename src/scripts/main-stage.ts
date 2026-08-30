@@ -25,6 +25,16 @@ const EDGE = 52;
 const CX = 350;
 const CY = 235;
 
+/** 아이콘 줄 — 이름 블록(minY 기준) 안에서의 자리. */
+const SOCIAL_Y = 116;
+/**
+ * 좌측 명함이 시작하는 자리(무대 절대 좌표).
+ *
+ * 이름 블록과 달리 화면 위쪽에 매달리지 않는다 — 명함은 빛구멍 옆 하늘에 앉는 덩어리라
+ * 무대에 고정이다. 이름 블록과 한 덩어리로 붙으면 좌측 열이 한 문단처럼 읽혀서 떼어 놨다.
+ */
+const CARD_Y = 226;
+
 /** 이 선 아래는 원 구역이 아니다 — CLI·바다·패널의 영역. */
 const CLI_TOP = 470;
 const CLI_BOTTOM = 514;
@@ -217,14 +227,14 @@ function start(svg: SVGSVGElement): void {
       "transform",
       `translate(${left + EDGE},${view.minY + 70})`,
     );
-    // 시안의 116은 제사가 한 줄일 때의 자리다. 제사 아래에 뜻이 나타날 자리를 비워 두려고
-    // 아이콘 줄을 그만큼 내렸다 — 뜻이 떠도 아이콘을 덮지 않는다.
+    // 아이콘은 제사에 붙는다(시안 116) — 이름·제사·아이콘이 한 덩어리로 읽히게.
+    // 뜻이 뜨는 자리를 비워 둘 필요는 없다. 뜻이 뜨는 동안은 아이콘이 물러난다(CSS).
     social.setAttribute(
       "transform",
-      `translate(${left + EDGE},${view.minY + 134})`,
+      `translate(${left + EDGE},${view.minY + SOCIAL_Y})`,
     );
     if (alumniCol) {
-      alumniCol.setAttribute("transform", `translate(${left + EDGE},196)`);
+      alumniCol.setAttribute("transform", `translate(${left + EDGE},${CARD_Y})`);
     }
     // 물러나는 기준은 실제 글자 길이에서 나온다(MainStage의 needW).
     for (const el of retreating) {
