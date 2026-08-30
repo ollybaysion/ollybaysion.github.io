@@ -235,29 +235,30 @@ function drawOne(
 			g.lineCap = 'round';
 			g.lineJoin = 'round';
 			g.lineWidth = lw;
+			const al = Math.min(a, 1).toFixed(3);
 			if (shape.seg === 'solid') {
-				g.strokeStyle = `rgba(${INK},${Math.min(a, 1).toFixed(3)})`;
-				g.beginPath();
-				for (let x = xa; x <= xb + 0.1; x += 7) {
-					if (x === xa) g.moveTo(x, yAt(x));
-					else g.lineTo(x, yAt(x));
-				}
-				g.stroke();
+				g.strokeStyle = `rgba(${INK},${al})`;
 			} else {
-				// 토막 끝은 흐려서 사라진다 — 자른 자국이 보이면 종이를 오린 것처럼 된다.
+				/*
+				  토막 끝은 흐려서 사라진다 — 자른 자국이 보이면 종이를 오린 것처럼 된다.
+				  흐리는 건 그라디언트지 토막이 아니다. 7단위씩 따로 그으면 둥근 끝이 이웃과
+				  겹쳐 알파가 두 번 쌓인다 — 선에 알이 줄줄이 맺혀 점선이 된다.
+				*/
 				const fw = Math.min(26, (xb - xa) * 0.4);
-				for (let x = xa; x < xb; x += 7) {
-					const xn = Math.min(x + 7, xb);
-					const mid = (x + xn) / 2;
-					const al = a * Math.min(1, (mid - xa) / fw) * Math.min(1, (xb - mid) / fw);
-					if (al < 0.015) continue;
-					g.strokeStyle = `rgba(${INK},${Math.min(al, 1).toFixed(3)})`;
-					g.beginPath();
-					g.moveTo(x, yAt(x));
-					g.lineTo(xn, yAt(xn));
-					g.stroke();
-				}
+				const edge = fw / Math.max(1e-6, xb - xa);
+				const fade = g.createLinearGradient(xa, 0, xb, 0);
+				fade.addColorStop(0, `rgba(${INK},0)`);
+				fade.addColorStop(edge, `rgba(${INK},${al})`);
+				fade.addColorStop(1 - edge, `rgba(${INK},${al})`);
+				fade.addColorStop(1, `rgba(${INK},0)`);
+				g.strokeStyle = fade;
 			}
+			// 한 획 — 이어 그어야 겹치는 자리가 생기지 않는다.
+			g.beginPath();
+			g.moveTo(xa, yAt(xa));
+			for (let x = xa + 7; x < xb; x += 7) g.lineTo(x, yAt(x));
+			g.lineTo(xb, yAt(xb));
+			g.stroke();
 
 			// 부서짐 물보라 — 알 갯수는 정본 700폭 기준을 실제 폭에 비례시켜 밀도를 지킨다.
 			if (cr > 0.12 && r === 0) {
