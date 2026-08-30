@@ -22,6 +22,18 @@ export const FY = 272;
  * 꽃머리는 어느 폭에서든 오른쪽 끝에서 같은 거리에 선다.
  */
 export const WALL = 706;
+/** 벽을 화면 끝에서 이만큼 더 밖에 둔다 — 가지의 잘린 끝이 화면에 보이지 않게. */
+export const WALL_GAP = 6;
+
+/**
+ * 화면 오른쪽 끝이 `right`일 때 그루가 옮겨 앉는 거리.
+ *
+ * 이름표도 이 값으로 따라 옮긴다 — 표찰이 제 나무를 놓치지 않게 자리 계산은 한 자리에 둔다.
+ */
+export function treeShift(right: number): number {
+	return Math.max(0, right + WALL_GAP - WALL);
+}
+
 /**
  * 시드 65 — 네 폭 시안에서 배롱 판이 받은 수(31 + 2×17).
  * 원반의 구김도 수술의 흩어짐도 이 수가 정한다. 바꾸면 다른 꽃이 된다.

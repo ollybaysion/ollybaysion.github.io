@@ -15,7 +15,9 @@ import { PROFILE } from '../config/profile.ts';
 import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
 import { meanAngle } from '../lib/coords/arc.ts';
-import { labelPlacement } from '../lib/stage/label.ts';
+import { RADIUS_MAX } from '../lib/coords/constants.ts';
+import { FX, WALL, WALL_GAP } from '../lib/stage/flower.ts';
+import { LABEL_GAP, labelPlacement } from '../lib/stage/label.ts';
 import { EDGE_L as EDGE } from '../lib/stage/list.ts';
 import { angleColor } from '../lib/stage/palette.ts';
 import { GLADE_BAND_COUNT, GLADE_GLINTS, HORIZON_Y, SEA_DEPTH } from '../lib/stage/sea.ts';
@@ -112,11 +114,42 @@ const NOTE_MIN_W = needW(
 	2,
 );
 /**
+ * 풀이 — note 아래로 이어지는 문단들. 손이 올라가 있는 동안 좌측 열을 통째로 채운다.
+ *
+ * 자는 명함 글줄과 같은 158이다(아래 `CARD_WRAP_LIMIT`). 이 글이 명함 자리를 덮으니
+ * 명함이 서는 폭에서 서면 되고, note(110)처럼 좁게 접으면 한 문단이 다섯 줄을 넘어
+ * 좌측 열이 실이 된다.
+ *
+ * 문단 사이는 빈 줄 하나가 아니라 그 절반이다 — 문단이 몇 안 되어 빈 줄을 다 주면
+ * 글이 아니라 목록으로 읽힌다.
+ */
+const ESSAY_W = 158;
+const ESSAY_SIZE = 10;
+const ESSAY_LINE_H = 13.5;
+const ESSAY_PARA_GAP = 10;
+const ESSAY_TOP = NOTE_SOURCE_Y + 26;
+
+let essayY = ESSAY_TOP;
+const ESSAY_BLOCKS = PROFILE.tagline.essay.map((para, index) => {
+	if (index > 0) essayY += ESSAY_PARA_GAP;
+	const lines = wrapText(para, ESSAY_SIZE, ESSAY_W, 8);
+	const block = { lines, y: essayY };
+	essayY += lines.length * ESSAY_LINE_H;
+	return block;
+});
+const ESSAY_BOTTOM = essayY;
+const ESSAY_MIN_W = needW(ESSAY_W, 2);
+
+/**
  * 손이 닿는 자리 — 글자만이 아니라 제사 줄 전체가 받는다.
  *
- * 제사 줄까지만 덮는다. 풀이가 뜨는 자리까지 늘리면 그 밑의 아이콘 링크를 가린다.
+ * 판이 둘인 이유: 글을 부르는 판(`EPIGRAPH_SHIELD`)은 제사 줄까지만이다. 여기까지만
+ * 늘 열려 있어야 그 밑의 아이콘 링크가 살아 있다. 글이 뜬 **뒤에는** 읽으려고 손이
+ * 아래로 내려가는데, 그때 받아 줄 자리가 없으면 제 손에 글이 꺼진다 — 그래서 풀이
+ * 전체를 덮는 둘째 판(`.epigraph-keep`)이 글이 떠 있는 동안에만 켜진다(CSS).
  */
 const EPIGRAPH_SHIELD = { y: TAGLINE_Y - 14, h: 23 };
+const EPIGRAPH_KEEP_H = ESSAY_BOTTOM - EPIGRAPH_SHIELD.y;
 
 /**
  * 좌측 명함의 이력 무리 — ALUMNI · CERTIFICATES.
@@ -210,6 +243,45 @@ const CARD_COL_W = Math.max(
  * 조건: EDGE + 열너비 + 여백 ≤ 폭 × (BAND_L / 700)
  */
 const CARD_MIN_W = needW(CARD_COL_W, 2);
+
+/**
+ * 배롱나무 표찰 — 초상 아래 붙는 이름과, 손을 올렸을 때 딸려 나오는 생태 몇 줄.
+ *
+ * 여기 좌표는 정본 700 열에서의 자리다. 그루가 화면 오른쪽 끝(벽)에 매달려 있어
+ * 넓은 화면에서는 통째로 오른쪽으로 옮겨 앉는데, 표찰도 같은 거리를 따라간다
+ * (`treeShift` — main-stage.ts의 layout이 잡는다).
+ *
+ * 가운데 맞춤이다. 그림 아래 붙는 표찰은 그림에 맞춰 서지 글줄에 맞춰 서지 않는다.
+ */
+const TREE_NAME = '배롱나무';
+const TREE_TAXON = 'Lagerstroemia indica · 부처꽃과';
+const TREE_NOTE =
+	'한 송이는 며칠이면 지고 다음 꽃이 그 자리를 잇는다. 백일을 핀다는 이름은 그렇게 얻었다. 껍질은 해마다 얇게 벗겨져 매끈해진다.';
+
+const TREE_W = 150;
+/** 꽃자루가 끝나는 자리(≈345)와 CLI 줄(470) 사이 — 그 하늘이 표찰의 몫이다. */
+const TREE_NAME_Y = 362;
+const TREE_NAME_SIZE = 11;
+const TREE_TAXON_SIZE = 8.5;
+const TREE_TAXON_Y = TREE_NAME_Y + 16;
+const TREE_NOTE_SIZE = 9.5;
+const TREE_NOTE_LINE_H = 12.5;
+const TREE_NOTE_Y = TREE_TAXON_Y + 16;
+const TREE_NOTE_LINES = wrapText(TREE_NOTE, TREE_NOTE_SIZE, TREE_W, 6);
+/** 이름줄을 받는 판. 이름보다 넓게 잡아 손이 표찰 근처에 오면 열리게 한다. */
+const TREE_HAND = { w: 96, y: TREE_NAME_Y - 15, h: 22 };
+
+/**
+ * 표찰이 서려면 화면이 얼마나 넓어야 하는가 — **글 점이 사는 하늘 밖에 설 수 있을 때만.**
+ *
+ * 그루는 `dx = 화면오른쪽끝 + WALL_GAP - WALL`만큼 옮겨 앉고, 화면 오른쪽 끝은
+ * 폭 w에서 `350 + w/2`다. 표찰의 왼쪽 끝(`FX + dx - TREE_W/2`)이 점밭의 오른쪽 끝
+ * (`350 + RADIUS_MAX`)과 그 옆 이름표 자리(`LABEL_GAP`)를 지나야 한다는 조건을 w로 푼 것.
+ * 좁은 화면에서는 나무가 점밭 위로 들어와 앉으니 표찰은 물러난다.
+ */
+const TREE_MIN_W = Math.ceil(
+	2 * (RADIUS_MAX + LABEL_GAP + TREE_W / 2 + WALL - WALL_GAP - FX),
+);
 
 /**
  * 목록 화면이 있는 카테고리.
@@ -322,6 +394,55 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		  글 점 아래에 둔다 — 무대의 주인은 글이다. 손도 타지 않게 비켜선다.
 		*/}
 		<g id="flower" data-flower pointer-events="none"></g>
+
+		{/*
+		  배롱나무 표찰 — 초상 아래. 그루와 같은 거리만큼 옮겨 앉고(layout),
+		  점밭 위로 밀려 들어올 만큼 좁은 화면에서는 물러난다(data-min-w).
+		*/}
+		<g id="tree-label" data-min-w={TREE_MIN_W}>
+			<rect
+				class="card-shield"
+				x={FX - TREE_HAND.w / 2}
+				y={TREE_HAND.y}
+				width={TREE_HAND.w}
+				height={TREE_HAND.h}
+			/>
+			{/* 이름줄에서 손이 아래로 내려가도 설명이 꺼지지 않게 잡아 두는 판. */}
+			<rect
+				class="card-shield tree-keep"
+				x={FX - TREE_W / 2}
+				y={TREE_HAND.y}
+				width={TREE_W}
+				height={TREE_NOTE_Y + TREE_NOTE_LINES.length * TREE_NOTE_LINE_H - TREE_HAND.y}
+			/>
+			<text
+				x={FX}
+				y={TREE_NAME_Y}
+				text-anchor="middle"
+				font-size={TREE_NAME_SIZE}
+				fill="#8f8c85"
+				opacity="0.8">
+				{TREE_NAME}
+			</text>
+			<g class="tree-note">
+				<text
+					x={FX}
+					y={TREE_TAXON_Y}
+					text-anchor="middle"
+					font-size={TREE_TAXON_SIZE}
+					fill="#8f8c85"
+					opacity="0.6">
+					{TREE_TAXON}
+				</text>
+				<text x={FX} y={TREE_NOTE_Y} text-anchor="middle" font-size={TREE_NOTE_SIZE} fill="#8f8c85">
+					{TREE_NOTE_LINES.map((line, i) => (
+						<tspan x={FX} y={TREE_NOTE_Y + i * TREE_NOTE_LINE_H}>
+							{line}
+						</tspan>
+					))}
+				</text>
+			</g>
+		</g>
 
 		{
 			posts.map((post) => (
@@ -524,6 +645,14 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 					width={TAGLINE_W + 16}
 					height={EPIGRAPH_SHIELD.h}
 				/>
+				{/* 글이 뜬 뒤 손이 글 위로 내려가도 꺼지지 않게 잡아 두는 판. */}
+				<rect
+					class="card-shield epigraph-keep"
+					x={-8}
+					y={EPIGRAPH_SHIELD.y}
+					width={ESSAY_W + 16}
+					height={EPIGRAPH_KEEP_H}
+				/>
 				<text x="0" y={TAGLINE_Y} font-size={TAGLINE_SIZE} fill="#8f8c85">
 					<tspan letter-spacing={TAGLINE_SPACING}>{PROFILE.tagline.lead}</tspan>
 					<tspan id="tagline-gloss" data-min-w={TAGLINE_GLOSS_MIN_W} dx={TAGLINE_GAP}
@@ -547,6 +676,21 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 						{PROFILE.tagline.source}
 					</text>
 				</g>
+				{
+					ESSAY_BLOCKS.length > 0 && (
+						<g class="epigraph-essay" data-min-w={ESSAY_MIN_W}>
+							{ESSAY_BLOCKS.map((block) => (
+								<text x="0" y={block.y} font-size={ESSAY_SIZE} fill="#8f8c85">
+									{block.lines.map((line, i) => (
+										<tspan x="0" y={block.y + i * ESSAY_LINE_H}>
+											{line}
+										</tspan>
+									))}
+								</text>
+							))}
+						</g>
+					)
+				}
 			</g>
 		</g>
 
@@ -737,14 +881,16 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 	}
 
 	/* 풀이는 손을 올렸을 때만 — 별자리 설명과 같은 문법이다. */
-	.epigraph-note {
+	.epigraph-note,
+	.epigraph-essay {
 		opacity: 0;
-		/* 뜬 글자가 손을 다시 받으면 깜빡인다 — 판정은 제사 줄의 방패만 한다. */
+		/* 뜬 글자가 손을 다시 받으면 깜빡인다 — 판정은 방패들만 한다. */
 		pointer-events: none;
 		transition: opacity 0.18s ease;
 	}
 
-	.epigraph:hover .epigraph-note:not(.is-hidden) {
+	.epigraph:hover .epigraph-note:not(.is-hidden),
+	.epigraph:hover .epigraph-essay:not(.is-hidden) {
 		opacity: 1;
 	}
 
@@ -770,13 +916,57 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		pointer-events: none;
 	}
 
+	/*
+	  풀이가 뜨는 동안 명함이 물러난다 — 좌측 열은 한 번에 한 가지만 말한다.
+	  판까지 내려놔야 그 자리에서 손이 계속 풀이에 닿는다.
+	  풀이가 물러난 좁은 화면에서는 명함도 그대로 선다 — 빈자리만 남기지 않게.
+	*/
+	#sitename:has(.epigraph:hover .epigraph-essay:not(.is-hidden)) ~ #alumni-col {
+		opacity: 0;
+		pointer-events: none;
+	}
+
 	.al-line {
 		fill: #8f8c85;
+	}
+
+	/* 배롱나무 표찰 — 이름은 늘, 생태는 손을 올렸을 때만. */
+	#tree-label {
+		transition: opacity 0.35s ease;
+	}
+
+	#tree-label.is-hidden {
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.tree-note {
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.18s ease;
+	}
+
+	#tree-label:hover .tree-note {
+		opacity: 1;
 	}
 
 	.card-shield {
 		fill: #ffffff;
 		fill-opacity: 0;
+		pointer-events: all;
+	}
+
+	/*
+	  잡아 두는 판 — 글이 떠 있는 동안에만 손을 받는다. 늘 켜 두면 그 밑의
+	  아이콘 링크와 무대가 통째로 이 판에 가린다.
+	*/
+	.epigraph .epigraph-keep,
+	#tree-label .tree-keep {
+		pointer-events: none;
+	}
+
+	.epigraph:hover .epigraph-keep,
+	#tree-label:hover .tree-keep {
 		pointer-events: all;
 	}
 
@@ -876,6 +1066,7 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 
 	@media (prefers-reduced-motion: reduce) {
 		#alumni-col,
+		#tree-label,
 		.series-line,
 		.series-node,
 		.series-name,
