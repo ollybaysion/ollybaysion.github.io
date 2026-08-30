@@ -356,14 +356,14 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 					))
 				}
 			</g>
-			<g id="glade-glints">
+			{/* 낱알 색은 무리에서 물려받는다 — 광원 색이 바뀌면 한 자리만 고치면 되게. */}
+			<g id="glade-glints" fill="#d9a154">
 				{
 					GLADE_GLINTS.map((glint) => (
 						<rect
 							y={glint.y.toFixed(1)}
 							height={glint.h.toFixed(1)}
 							rx={(glint.h / 2).toFixed(1)}
-							fill="#d9a154"
 							opacity="0"
 						/>
 					))

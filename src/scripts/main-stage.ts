@@ -170,8 +170,12 @@ function start(svg: SVGSVGElement): void {
   const gladeBands = [
     ...svg.querySelectorAll<SVGRectElement>("#glade-bands rect"),
   ];
+  const gladeGlintsG = svg.querySelector<SVGGElement>("#glade-glints")!;
   const gladeGlints = [
-    ...svg.querySelectorAll<SVGRectElement>("#glade-glints rect"),
+    ...gladeGlintsG.querySelectorAll<SVGRectElement>("rect"),
+  ];
+  const gladeStops = [
+    ...svg.querySelectorAll<SVGStopElement>("#gladecol stop"),
   ];
 
   /**
@@ -629,6 +633,10 @@ function start(svg: SVGSVGElement): void {
 
     for (const stop of haloStops) stop.setAttribute("stop-color", color);
     for (const stop of bloomStops) stop.setAttribute("stop-color", color);
+    // 수면에 비친 빛도 그 빛이다 — 달길과 물비늘이 광원 색을 따라간다.
+    // 중심 알(glade-core)은 빛구멍 한가운데처럼 흰 채로 둔다.
+    for (const stop of gladeStops) stop.setAttribute("stop-color", color);
+    gladeGlintsG.setAttribute("fill", color);
 
     const now = performance.now() / 1000;
     const dt = lastT ? Math.min(0.05, now - lastT) : 0.016;
