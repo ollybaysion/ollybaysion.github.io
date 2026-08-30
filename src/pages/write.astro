@@ -136,9 +136,16 @@ const data = {
 
 						<div class="w-field">
 							<label for="w-category">카테고리</label>
-							<select id="w-category" data-f="category">
-								{names.map((name) => <option value={name}>{name}</option>)}
-							</select>
+							<input
+								id="w-category"
+								data-f="category"
+								type="text"
+								list="w-category-list"
+								autocomplete="off"
+							/>
+							<datalist id="w-category-list">
+								{names.map((name) => <option value={name}></option>)}
+							</datalist>
 						</div>
 
 						<div class="w-field w-span">
