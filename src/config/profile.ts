@@ -24,8 +24,18 @@ export interface Profile {
 	 * `note`는 그 낱말이 무슨 말인지 풀어 쓴 글, `source`는 그 글의 출처다. 제사에 손을
 	 * 올렸을 때만 아래에 나타난다 — 늘 떠 있으면 이름 아래가 문단이 된다. 화면에서
 	 * 폭에 맞춰 줄이 나뉘니 줄바꿈을 넣지 말고 한 문장으로 쓴다.
+	 *
+	 * `essay`는 그 아래로 이어지는 풀이다. 한 항목이 한 문단이고, 손이 올라가 있는 동안
+	 * 명함(ALUMNI·CERTIFICATES) 자리를 덮는다. 문단도 화면에서 접히니 줄바꿈을 넣지 않는다.
+	 * 비워 두면 note와 출처까지만 나온다.
 	 */
-	tagline: { lead: string; gloss: string; note: string; source: string };
+	tagline: {
+		lead: string;
+		gloss: string;
+		note: string;
+		source: string;
+		essay: string[];
+	};
 	/** 탭·검색 결과·RSS에 나가는 설명. 제사와 하는 일이 달라 따로 둔다. */
 	description: string;
 	social: { github: string; instagram: string };

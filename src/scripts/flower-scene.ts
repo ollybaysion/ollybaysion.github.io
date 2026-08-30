@@ -38,6 +38,7 @@ import {
   PETAL_POOL,
   RIPPLE_POOL,
   SEED,
+  treeShift,
   WALL,
 } from "../lib/stage/flower.ts";
 import { clamp01, noise1, rng } from "../lib/stage/noise.ts";
@@ -47,9 +48,6 @@ const NS = "http://www.w3.org/2000/svg";
 
 /** 꽃밥의 금 — 제 색이다. 수면에 비친 빛과 달리 광원을 따라가지 않는다. */
 const GOLD = "#d9a154";
-
-/** 벽을 화면 끝에서 이만큼 더 밖에 둔다 — 가지의 잘린 끝이 화면에 보이지 않게. */
-const WALL_GAP = 6;
 
 export interface FlowerScene {
   /** 모션 줄이기 화면인가 — 매 프레임 부를 필요가 없다는 뜻이다. */
@@ -481,7 +479,7 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
       bounds.left = box.left;
       bounds.right = box.left + box.width;
       // 벽을 화면 끝 바로 밖에 댄다 — 잘린 끝이 화면 밖에 숨는다.
-      dx = Math.max(0, bounds.right + WALL_GAP - WALL);
+      dx = treeShift(bounds.right);
       tree.setAttribute("transform", `translate(${dx.toFixed(1)},0)`);
     },
 

@@ -8,6 +8,7 @@
  *        다른 지점 클릭 = 리로드, 내리기 = 닫기.
  * CLI = 데모. 명령 체계가 미확정이라 입력 확인 모달까지만 간다.
  */
+import { treeShift } from "../lib/stage/flower.ts";
 import {
   angleColor,
   angleColorWashed,
@@ -62,6 +63,12 @@ const PULL_SIGMA = 75;
 const HIT_R = 8;
 const HIT_R_TOUCH = 16;
 
+/**
+ * 빔이 프레임선 안쪽에서 잦아드는 폭.
+ *
+ * 선에서 딱 끊으면 막이 잘린 자국을 남긴다. CLI 줄 위에서 잦아드는 것과 같은 값이다.
+ */
+const BEAM_FADE = 40;
 
 interface Post {
   angle: number;
@@ -140,7 +147,9 @@ function start(svg: SVGSVGElement): void {
   const sitename = svg.querySelector<SVGGElement>("#sitename")!;
   const social = svg.querySelector<SVGGElement>("#social")!;
   const alumniCol = svg.querySelector<SVGGElement>("#alumni-col");
-  /** 좁아지면 물러나는 좌측 열 조각들 — 제사의 뜻풀이와 명함. */
+  /** 배롱나무 표찰 — 그루를 따라 옮겨 앉는다. */
+  const treeLabel = svg.querySelector<SVGGElement>("#tree-label");
+  /** 좁아지면 물러나는 조각들 — 제사의 뜻풀이·풀이, 명함, 배롱나무 표찰. */
   const retreating = [...svg.querySelectorAll<SVGElement>("[data-min-w]")];
   const panel = svg.querySelector<SVGGElement>("#panel")!;
   const waveFill = svg.querySelector<SVGPathElement>("#p-wavefill")!;
@@ -167,7 +176,15 @@ function start(svg: SVGSVGElement): void {
   );
 
   // 화면 비율만큼 좌우로 벌어진 무대. layout()이 갱신한다.
-  const view = { minX: 0, minY: 0, w: VIEW_W, h: VIEW_H };
+  // bandL·bandR = 화면에 그어진 프레임 세로선, 곧 좌·가운데·우 영역의 경계다.
+  const view = {
+    minX: 0,
+    minY: 0,
+    w: VIEW_W,
+    h: VIEW_H,
+    bandL: 0,
+    bandR: VIEW_W,
+  };
 
   const bleeds = [...svg.querySelectorAll<SVGLineElement>(".bleed")];
   const covers = [...svg.querySelectorAll<SVGRectElement>(".cover")];
@@ -206,13 +223,19 @@ function start(svg: SVGSVGElement): void {
       rect.setAttribute("height", String(h));
     }
     // 필름 프레임 세로선 — 정본의 폭 대비 위치(17% · 87%)를 유지한다.
-    for (const band of bands) {
-      const x = left + (w * Number(band.dataset.at)) / VIEW_W;
+    // 그어진 자리를 그대로 영역 경계로 쓴다 — 빔이 그 안에서만 산다(frame).
+    const bandXs = bands.map(
+      (band) => left + (w * Number(band.dataset.at)) / VIEW_W,
+    );
+    bands.forEach((band, i) => {
+      const x = bandXs[i]!;
       band.setAttribute("x1", String(x));
       band.setAttribute("x2", String(x));
       band.setAttribute("y1", String(view.minY));
       band.setAttribute("y2", String(view.minY + h));
-    }
+    });
+    view.bandL = bandXs.length > 0 ? Math.min(...bandXs) : left;
+    view.bandR = bandXs.length > 0 ? Math.max(...bandXs) : right;
     // 바다 — 수평선부터 화면 바닥까지 전폭. 무대에서는 깊이가 곧 화면 높이라
     // 눌리지 않는다(px = 무대 단위 → 화면 px. 비율을 지키는 매핑이라 가로세로가 같다).
     const seaH = Math.max(120, view.minY + h - HORIZON_Y);
@@ -226,6 +249,11 @@ function start(svg: SVGSVGElement): void {
 
     // 배롱나무 — 가지 길이는 정본 그대로 두고, 벽이 화면 끝에 오도록 그루째 옮긴다.
     flower?.resize({ left, width: w });
+    // 표찰은 제 나무를 따라간다 — 그루와 같은 거리다.
+    treeLabel?.setAttribute(
+      "transform",
+      `translate(${treeShift(right).toFixed(1)},0)`,
+    );
 
     // CLI ❯와 입력은 화면 왼쪽 끝에 붙는다. 파도 목록 행은 가운데 열에 그대로 남는다.
     // 정본 x가 이미 52(EDGE)라 화면 왼쪽 끝만큼만 밀면 된다.
@@ -376,9 +404,11 @@ function start(svg: SVGSVGElement): void {
       return;
     }
 
-    // 좌측 명함은 읽는 것이지 누르는 것이 아니다 — 눌러도 아무 일도 없다.
+    // 명함과 표찰은 읽는 것이지 누르는 것이 아니다 — 눌러도 아무 일도 없다.
     if (
-      (e.target as Element | null)?.closest?.("#sitename, #social, #alumni-col")
+      (e.target as Element | null)?.closest?.(
+        "#sitename, #social, #alumni-col, #tree-label",
+      )
     ) {
       return;
     }
@@ -528,11 +558,24 @@ function start(svg: SVGSVGElement): void {
     const bdy = press.y - CY;
     const distance = Math.hypot(bdx, bdy);
     const theta = Math.atan2(bdy, bdx);
-    const beamOn = distance > R1 - R2 + 8 && press.y < CLI_TOP;
+    /*
+      막은 가운데 영역에서만 산다. 프레임선 밖은 좌측 명함과 배롱나무 표찰의 자리라
+      거기까지 따라가면 읽는 글자 위로 빛이 덮인다. 선 앞에서 잦아든다 — CLI 줄 위에서
+      잦아드는 것과 같은 문법이다.
+    */
+    const inColumn = Math.max(
+      0,
+      Math.min(
+        1,
+        Math.min(press.x - view.bandL, view.bandR - press.x) / BEAM_FADE,
+      ),
+    );
+    const beamOn = distance > R1 - R2 + 8 && press.y < CLI_TOP && inColumn > 0;
     const width = beamOn ? drawBeam(distance, theta) : 0;
     const beamOpacity = beamOn
       ? 0.9 *
         press.op *
+        inColumn *
         Math.min(1, (distance - (R1 - R2 + 8)) / 45) *
         Math.max(0, Math.min(1, (CLI_TOP - press.y) / 40))
       : 0;
