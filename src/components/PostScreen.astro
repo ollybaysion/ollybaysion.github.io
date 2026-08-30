@@ -20,12 +20,13 @@ import {
 	MINIMAP,
 	NEIGHBORS_SHOWN,
 	STRIP,
+	TAIL_METRICS,
 	minimapDot,
 	postTail,
 	stripPoints,
 	titleBaselines,
 } from '../lib/stage/post.ts';
-import { SEA_BANDS } from '../lib/stage/sea-bands.ts';
+import { GLADE_BAND_COUNT, GLADE_GLINTS, HORIZON_Y, SEA_DEPTH } from '../lib/stage/sea.ts';
 import { truncateText, wrapText } from '../lib/stage/text.ts';
 
 interface Props {
@@ -96,6 +97,15 @@ const strip =
 				};
 			})()
 		: null;
+
+/**
+ * 꼬리 바다 — 무대와 같은 바다를 얕은 띠에 눌러 담는다.
+ *
+ * 파도는 정본 깊이(272) 그대로 살고 화면 쪽만 `TAIL_METRICS.sea`(200)로 눌린다.
+ * 윤슬 좌표(545~782)가 그 깊이를 기준으로 잡혀 있어서, 깊이를 줄이면 파도만 얕아지고
+ * 빛기둥은 제자리에 남아 둘이 어긋난다. 그래서 누르는 건 그리기가 아니라 보기다.
+ */
+const SEA_SQUASH = TAIL_METRICS.sea / SEA_DEPTH;
 
 const category = categoriesData.categories[post.category];
 const n = (value: number) => Number(value.toFixed(2));
@@ -301,9 +311,21 @@ const dot = minimapDot(post);
 				<stop offset="68%" stop-color="#000000" stop-opacity="0"></stop>
 				<stop offset="100%" stop-color="#000000" stop-opacity="0.3"></stop>
 			</radialGradient>
-			<clipPath id="seaclipP">
-				<rect id="seaclipP-rect" x="0" y="590" width="700" height="200"></rect>
-			</clipPath>
+			{/* 달길 기둥 — 수평선 쪽이 밝고 관찰자 쪽으로 잦아든다. */}
+			<linearGradient id="gladecolP" x1="0" y1="0" x2="0" y2="1">
+				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.5"></stop>
+				<stop offset="55%" stop-color="#d9a154" stop-opacity="0.16"></stop>
+				<stop offset="100%" stop-color="#d9a154" stop-opacity="0.03"></stop>
+			</linearGradient>
+			{/* 그림자 띠 — 가운데만 짙고 가장자리로 없어진다. 물 위의 그림자에는 테두리가 없다. */}
+			<radialGradient id="gladebandP">
+				<stop offset="0%" stop-color="#131316" stop-opacity="1"></stop>
+				<stop offset="45%" stop-color="#131316" stop-opacity="0.82"></stop>
+				<stop offset="100%" stop-color="#131316" stop-opacity="0"></stop>
+			</radialGradient>
+			<filter id="softenP" x="-20%" y="-20%" width="140%" height="140%">
+				<feGaussianBlur stdDeviation="3"></feGaussianBlur>
+			</filter>
 		</defs>
 
 		{
@@ -369,27 +391,52 @@ const dot = minimapDot(post);
 			stroke-width="1.5"
 			opacity="0.55"></line>
 
-		<g transform={`translate(0,${tail.seaShift})`}>
-			<g clip-path="url(#seaclipP)" opacity="0.3">
-				<g id="seaP" transform="translate(0,457) scale(0.7)">
-					{SEA_BANDS.map((band) => <path d={band.d} fill={band.fill} />)}
+		{/*
+		  바다 — 무대와 같은 먹선 파도. 자리와 픽셀 크기는 post-screen.ts가 잡는다.
+		  글 뒤에 오는 코다라 무대보다 한 겹 물러나 앉는다.
+		*/}
+		<g id="seaP" opacity="0.62">
+			<foreignObject data-sea x="0" y={tail.horizon} width="700" height={TAIL_METRICS.sea}>
+				<canvas style="display:block;width:100%;height:100%"></canvas>
+			</foreignObject>
+			{/*
+			  윤슬 — 정본 깊이(수평선 518 기준)로 그려 두고 통째로 눌러 꼬리에 앉힌다.
+			  파도 캔버스가 받는 눌림과 같은 값이라 띠와 낱알이 먹선 위에 그대로 얹힌다.
+			*/}
+			<g
+				data-glade
+				transform={`translate(0,${n(tail.horizon - HORIZON_Y * SEA_SQUASH)}) scale(1,${n(SEA_SQUASH)})`}
+			>
+				<path data-glade-col d="" fill="url(#gladecolP)" filter="url(#softenP)"></path>
+				<ellipse
+					data-glade-core
+					cx="350"
+					cy="552"
+					rx="24"
+					ry="4.5"
+					fill="#fffdf4"
+					opacity="0.45"
+					filter="url(#softenP)"></ellipse>
+				<g>
+					{
+						Array.from({ length: GLADE_BAND_COUNT }, () => (
+							<ellipse data-glade-band cx="350" fill="url(#gladebandP)" opacity="0" />
+						))
+					}
+				</g>
+				<g data-glade-glints fill="#d9a154">
+					{
+						GLADE_GLINTS.map((glint) => (
+							<rect
+								y={glint.y.toFixed(1)}
+								height={glint.h.toFixed(1)}
+								rx={(glint.h / 2).toFixed(1)}
+								opacity="0"
+							/>
+						))
+					}
 				</g>
 			</g>
-			{/* 카라멜 반사 막대 — 수평선 아래로 흘러내리는 빛. */}
-			<rect class="refl" x="305" y="625" width="90" height="3" rx="1.5" fill="#d9a154" opacity="0.75"
-			></rect>
-			<rect class="refl" x="322" y="642" width="56" height="3" rx="1.5" fill="#d9a154" opacity="0.6"
-			></rect>
-			<rect class="refl" x="295" y="662" width="110" height="3" rx="1.5" fill="#d9a154" opacity="0.5"
-			></rect>
-			<rect class="refl" x="320" y="684" width="60" height="3" rx="1.5" fill="#d9a154" opacity="0.42"
-			></rect>
-			<rect class="refl" x="308" y="710" width="84" height="3" rx="1.5" fill="#d9a154" opacity="0.34"
-			></rect>
-			<rect class="refl" x="328" y="737" width="44" height="3" rx="1.5" fill="#d9a154" opacity="0.26"
-			></rect>
-			<rect class="refl" x="318" y="767" width="64" height="3" rx="1.5" fill="#d9a154" opacity="0.18"
-			></rect>
 		</g>
 
 		<rect class="bleed-cover" x="0" y="0" width="700" height={tail.height} fill="url(#bvigP)"></rect>
@@ -463,6 +510,11 @@ const dot = minimapDot(post);
 		fill: #ffffff;
 		fill-opacity: 0;
 		pointer-events: all;
+	}
+
+	/* 바다·윤슬도 풍경이다 — 커서를 가로채지 않는다. */
+	#seaP {
+		pointer-events: none;
 	}
 
 	/* 비네트·그레인·프레임선은 장식이다 — 클릭은 그 아래 링크가 받는다. */

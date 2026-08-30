@@ -98,10 +98,13 @@ const TAIL = {
 	/** 가까운 글이 있을 때와 없을 때의 수평선 자리. */
 	horizon: 200,
 	bareHorizon: 40,
-	/** 수평선 아래 바다가 차지하는 높이. */
+	/**
+	 * 수평선 아래 바다가 차지하는 높이.
+	 *
+	 * 무대의 바다는 272(수평선 518 → 바닥 790)다. 꼬리는 그 바다를 이 높이에 눌러 담는다 —
+	 * 얕은 바다가 아니라 **같은 바다를 멀리서 본 것**이라야 두 화면이 한 세계로 읽힌다.
+	 */
 	sea: 200,
-	/** 정본 바다 그림에서 수평선에 해당하는 y. 여기를 수평선에 맞춰 끌어올린다. */
-	seaBase: 590,
 } as const;
 
 export interface NeighborRow {
@@ -113,8 +116,6 @@ export interface PostTail {
 	label: number;
 	rows: NeighborRow[];
 	horizon: number;
-	/** 바다 그림을 통째로 올리는 양(음수). */
-	seaShift: number;
 	height: number;
 }
 
@@ -129,7 +130,6 @@ export function postTail(count: number): PostTail {
 		label: TAIL.label,
 		rows,
 		horizon,
-		seaShift: horizon - TAIL.seaBase,
 		height: horizon + TAIL.sea,
 	};
 }
