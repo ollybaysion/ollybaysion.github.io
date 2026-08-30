@@ -18,7 +18,7 @@ import { meanAngle } from '../lib/coords/arc.ts';
 import { labelPlacement } from '../lib/stage/label.ts';
 import { EDGE_L as EDGE } from '../lib/stage/list.ts';
 import { angleColor } from '../lib/stage/palette.ts';
-import { SEA_BANDS } from '../lib/stage/sea.ts';
+import { GLADE_BAND_COUNT, GLADE_GLINTS, HORIZON_Y } from '../lib/stage/sea.ts';
 import { textWidth, wrapText } from '../lib/stage/text.ts';
 
 const posts = postsData.posts.map((post) => ({
@@ -212,15 +212,6 @@ const CARD_COL_W = Math.max(
 const CARD_MIN_W = needW(CARD_COL_W, 2);
 
 const PANEL_ROWS = [592, 624, 656, 688, 720];
-const REFLECTIONS = [
-	{ x: 305, y: 625, w: 90, o: 0.75 },
-	{ x: 322, y: 642, w: 56, o: 0.6 },
-	{ x: 295, y: 662, w: 110, o: 0.5 },
-	{ x: 320, y: 684, w: 60, o: 0.42 },
-	{ x: 308, y: 710, w: 84, o: 0.34 },
-	{ x: 328, y: 737, w: 44, o: 0.26 },
-	{ x: 318, y: 767, w: 64, o: 0.18 },
-];
 ---
 
 <div class="stage">
@@ -290,7 +281,12 @@ const REFLECTIONS = [
 			<filter id="beamblur" x="-40%" y="-40%" width="180%" height="180%">
 				<feGaussianBlur stdDeviation="5"></feGaussianBlur>
 			</filter>
-			<clipPath id="seaclip"><rect id="seaclip-rect" x="0" y="590" width="700" height="200"></rect></clipPath>
+			{/* 달길 기둥 — 수평선 쪽이 밝고 관찰자 쪽으로 잦아든다. */}
+			<linearGradient id="gladecol" x1="0" y1="0" x2="0" y2="1">
+				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.5"></stop>
+				<stop offset="55%" stop-color="#d9a154" stop-opacity="0.16"></stop>
+				<stop offset="100%" stop-color="#d9a154" stop-opacity="0.03"></stop>
+			</linearGradient>
 		</defs>
 
 		<circle cx="350" cy="235" r="210" fill="url(#clothfield)"></circle>
@@ -323,29 +319,57 @@ const REFLECTIONS = [
 			))
 		}
 
-		<line class="bleed" y1="590" y2="590" stroke="#2a2a2e" stroke-width="1.5" opacity="0.55"></line>
-		<g clip-path="url(#seaclip)" opacity="0.3">
-			<g id="sea" transform="translate(0,457) scale(0.7)">
-				{SEA_BANDS.map((band) => <path d={band.d} fill={band.fill} />)}
-			</g>
-			{/* 세로로 긴 화면에서 바다가 끊기지 않게, 마지막 밴드 색으로 바닥까지 잇는다. */}
-			<rect id="sea-floor" y="960" fill="#e4e4e4"></rect>
-		</g>
+		<line
+			class="bleed"
+			y1={HORIZON_Y}
+			y2={HORIZON_Y}
+			stroke="#2a2a2e"
+			stroke-width="1.5"
+			opacity="0.55"></line>
+		{/*
+		  바다 — 수평선 아래 전폭 캔버스. 먹선 파도가 여기서 태어나 물가로 내려온다.
+		  자리와 픽셀 크기는 layout()이 화면에 맞춘다.
+		*/}
+		<foreignObject id="sea-fo" x="0" y={HORIZON_Y} width="700" height="272">
+			<canvas id="seacv" style="display:block;width:100%;height:100%"></canvas>
+		</foreignObject>
 
-		{
-			REFLECTIONS.map((bar) => (
-				<rect
-					class="refl"
-					x={bar.x}
-					y={bar.y}
-					width={bar.w}
-					height="3"
-					rx="1.5"
-					fill="#d9a154"
-					opacity={bar.o}
-				/>
-			))
-		}
+		{/*
+		  윤슬 — 달길 빛기둥 위의 물비늘. 그림자 띠와 낱알 점등은 능선 위상이 아니라
+		  파도가 그 깊이를 실제로 지나갈 때 켜진다(main-stage.ts).
+		*/}
+		<g id="glade">
+			<path id="glade-col" d="" fill="url(#gladecol)" filter="url(#soften)"></path>
+			<ellipse
+				id="glade-core"
+				cx="350"
+				cy="552"
+				rx="24"
+				ry="4.5"
+				fill="#fffdf4"
+				opacity="0.45"
+				filter="url(#soften)"></ellipse>
+			<g id="glade-bands">
+				{
+					Array.from({ length: GLADE_BAND_COUNT }, () => (
+						<rect fill="#131316" opacity="0" />
+					))
+				}
+			</g>
+			<g id="glade-glints">
+				{
+					GLADE_GLINTS.map((glint) => (
+						<rect
+							y={glint.y.toFixed(1)}
+							height={glint.h.toFixed(1)}
+							rx={(glint.h / 2).toFixed(1)}
+							fill="#d9a154"
+							opacity="0"
+						/>
+					))
+				}
+			</g>
+		</g>
 
 		{
 			constellations.map((series) => (
@@ -653,6 +677,12 @@ const REFLECTIONS = [
 	}
 
 	.post {
+		pointer-events: none;
+	}
+
+	/* 바다·윤슬은 배경이다 — 커서를 가로채면 그 위에서 목록이 안 열린다. */
+	#sea-fo,
+	#glade {
 		pointer-events: none;
 	}
 
