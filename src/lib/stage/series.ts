@@ -8,17 +8,48 @@
  * 정본 재현은 `test/stage/series.test.ts`가 지킨다.
  */
 
-/** 목록을 관통하는 선과 그 위의 회차 점. 가로 자리는 정본 값. */
-const NODE = {
+import { type Edition, WIDE } from './page.ts';
+
+/** 목록을 관통하는 선과 그 위의 회차 점. */
+export interface SeriesMetrics {
+	x: number;
+	r: number;
+	/** 회차 번호 — 선 왼쪽에 오른쪽 정렬로 붙는다. */
+	episodeX: number;
+	/** 제목·날짜가 시작하는 자리. */
+	textX: number;
+	titleDy: number;
+	dateDy: number;
+}
+
+/** 정본 값 — 넓은 판. */
+const NODE: SeriesMetrics = {
 	x: 84,
 	r: 4,
-	/** 회차 번호 — 선 왼쪽에 오른쪽 정렬로 붙는다. */
 	episodeX: 68,
-	/** 제목·날짜가 시작하는 자리. */
 	textX: 108,
 	titleDy: 5,
 	dateDy: 24,
-} as const;
+};
+
+/**
+ * 좁은 판 — 선과 번호와 글줄이 통째로 왼쪽 여백(24) 쪽으로 당겨진다.
+ * 글줄은 선에서 정본과 같은 거리(24)에 앉고, 회차 번호는 오른쪽 정렬이라
+ * 한 자리 숫자가 여백선에 맞는다(두 자리는 반 글자쯤 밖으로 나간다).
+ * 세로 리듬(첫 점 231 · 간격 66)은 판이 달라도 그대로다.
+ */
+const NARROW_NODE: SeriesMetrics = {
+	x: 44,
+	r: 4,
+	episodeX: 32,
+	textX: 68,
+	titleDy: 5,
+	dateDy: 24,
+};
+
+export function seriesMetrics(edition: Edition): SeriesMetrics {
+	return edition.name === 'narrow' ? NARROW_NODE : NODE;
+}
 
 /** 첫 회차 점. 부제(144) 아래로 한 숨 떨어뜨린 자리다. */
 export const FIRST_NODE_Y = 231;
@@ -41,11 +72,12 @@ export interface SeriesLayout {
 	height: number;
 }
 
-/** 회차 수 → 한 장의 세로 배치. */
-export function seriesLayout(count: number): SeriesLayout {
+/** 회차 수 → 한 장의 세로 배치. 판을 주지 않으면 정본(넓은 판)이다. */
+export function seriesLayout(count: number, edition: Edition = WIDE): SeriesLayout {
+	const node = seriesMetrics(edition);
 	const nodes = Array.from({ length: Math.max(0, count) }, (_, i) => {
 		const dot = FIRST_NODE_Y + i * NODE_STRIDE;
-		return { dot, title: dot + NODE.titleDy, date: dot + NODE.dateDy };
+		return { dot, title: dot + node.titleDy, date: dot + node.dateDy };
 	});
 
 	const last = nodes[nodes.length - 1];
@@ -53,7 +85,7 @@ export function seriesLayout(count: number): SeriesLayout {
 		nodes,
 		line:
 			nodes.length > 1
-				? `M${nodes.map((node) => `${NODE.x.toFixed(1)},${node.dot.toFixed(1)}`).join(' L')}`
+				? `M${nodes.map((entry) => `${node.x.toFixed(1)},${entry.dot.toFixed(1)}`).join(' L')}`
 				: null,
 		height: (last ? last.date : FIRST_NODE_Y) + PAGE_TAIL,
 	};

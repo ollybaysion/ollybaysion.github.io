@@ -15,15 +15,15 @@ import neighborsData from '../data/generated/neighbors.json';
 import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
 import { meanAngle } from '../lib/coords/arc.ts';
-import { BAND, EDGE_L, EDGE_R, HOLE } from '../lib/stage/list.ts';
+import { EDITIONS, column } from '../lib/stage/page.ts';
 import { angleColor, categoryDeepColor } from '../lib/stage/palette.ts';
 import {
 	HEAD,
-	MINIMAP,
 	NEIGHBORS_SHOWN,
 	STRIP,
 	TAIL_METRICS,
 	minimapDot,
+	postMetrics,
 	postTail,
 	stripPoints,
 	titleBaselines,
@@ -45,10 +45,6 @@ if (!post) {
 const bySlug = new Map(postsData.posts.map((entry) => [entry.slug, entry]));
 const accent = angleColor(post.angle);
 
-/** 제목 — 아래에서 쌓으므로 줄이 늘어도 메타가 제자리다. */
-const titleLines = wrapText(post.title, HEAD.title.size, EDGE_R - EDGE_L, HEAD.title.maxLines);
-const titleY = titleBaselines(titleLines.length);
-
 const episode = post.series ? post.episode : undefined;
 const meta = [
 	post.date.slice(0, 10),
@@ -65,7 +61,7 @@ const neighbors = (neighborsData.neighbors[slug] ?? [])
 		return [
 			{
 				slug: near.slug,
-				title: truncateText(entry.title, 13.5, EDGE_R - 76 - 52),
+				title: entry.title,
 				color: angleColor(entry.angle),
 				percent: Math.round(near.proximity * 100),
 			},
@@ -87,14 +83,12 @@ const discoveries = (discoveriesData.discoveries[slug] ?? []).flatMap((found) =>
 	return [
 		{
 			slug: found.slug,
-			title: truncateText(entry.title, 13.5, EDGE_R - 76 - 64),
+			title: entry.title,
 			category: entry.category,
 			color: angleColor(entry.angle),
 		},
 	];
 });
-
-const tail = postTail(neighbors.length, discoveries.length);
 
 /** 시리즈 스트립 — 별자리를 상자에 눕히고 이 글의 회차를 밝힌다. */
 const members = post.series ? (seriesData.series[post.series] ?? []) : [];
@@ -133,168 +127,277 @@ const SEA_SQUASH = TAIL_METRICS.sea / SEA_DEPTH;
 
 const category = categoriesData.categories[post.category];
 const n = (value: number) => Number(value.toFixed(2));
-const dot = minimapDot(post);
+
+/**
+ * 판마다 한 벌 — 머리와 꼬리.
+ *
+ * 본문은 그냥 글이라 판을 타지 않는다(폭만 CSS가 바꾼다). 판이 가르는 건 SVG로 그린
+ * 머리·꼬리다: 제목이 접히는 폭, 미니맵 자리, 점과 글줄의 x, 실린 줄이 잘리는 폭.
+ * 세로 자리는 두 판이 같아서 꼬리 높이도 같다.
+ */
+const sheets = EDITIONS.map((edition) => {
+	const m = postMetrics(edition);
+	const titleLines = wrapText(
+		post.title,
+		m.head.title.size,
+		column(edition),
+		m.head.title.maxLines,
+	);
+	const room = edition.edgeR - m.tail.textX;
+	return {
+		edition,
+		m,
+		titleLines,
+		titleY: titleBaselines(titleLines.length, m.head.title),
+		dot: minimapDot(post, m.minimap),
+		tail: postTail(neighbors.length, discoveries.length, edition),
+		// 오른쪽 끝의 근접도(52)·카테고리(64)가 앉을 자리를 비워 두고 자른다.
+		neighbors: neighbors.map((near) => ({
+			...near,
+			title: truncateText(near.title, 13.5, room - 52),
+		})),
+		discoveries: discoveries.map((found) => ({
+			...found,
+			title: truncateText(found.title, 13.5, room - 64),
+		})),
+	};
+});
 ---
 
 <article
 	class="post"
 	style={`--post-accent: ${accent};`}
 	data-head={HEAD.height}
-	data-tail={tail.height}
+	data-tail={sheets[0]!.tail.height}
 >
-	<svg class="head bleed-svg" viewBox={`0 0 700 ${HEAD.height}`} data-h={HEAD.height}>
-		<defs>
-			<radialGradient id="lapP-light">
-				<stop offset="0%" stop-color="#fffdf4"></stop>
-				<stop offset="70%" stop-color="#fffdf4"></stop>
-				<stop offset="100%" stop-color="#eeddb8"></stop>
-			</radialGradient>
-			<radialGradient id="lapP-bloom">
-				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.45"></stop>
-				<stop offset="45%" stop-color="#d9a154" stop-opacity="0.158"></stop>
-				<stop offset="100%" stop-color="#d9a154" stop-opacity="0"></stop>
-			</radialGradient>
-			<radialGradient id="clothfieldP">
-				<stop offset="0%" stop-color="#cfc9bd" stop-opacity="0"></stop>
-				<stop offset="36%" stop-color="#cfc9bd" stop-opacity="0"></stop>
-				<stop offset="46%" stop-color="#cfc9bd" stop-opacity="0.13"></stop>
-				<stop offset="62%" stop-color="#cfc9bd" stop-opacity="0.08"></stop>
-				<stop offset="100%" stop-color="#cfc9bd" stop-opacity="0"></stop>
-			</radialGradient>
-			<radialGradient id="pvig" cx="0.5" cy="0.42" r="0.8">
-				<stop offset="0%" stop-color="#000000" stop-opacity="0"></stop>
-				<stop offset="68%" stop-color="#000000" stop-opacity="0"></stop>
-				<stop offset="100%" stop-color="#000000" stop-opacity="0.2"></stop>
-			</radialGradient>
-			<filter id="grainw">
-				<feTurbulence
-					type="fractalNoise"
-					baseFrequency="0.8"
-					numOctaves="2"
-					seed="7"
-					stitchTiles="stitch"></feTurbulence>
-				<feColorMatrix
-					type="matrix"
-					values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.6 0.6 0.6 0 0"></feColorMatrix>
-			</filter>
-			<filter id="punch" x="-15%" y="-15%" width="130%" height="130%">
-				<feTurbulence
-					type="fractalNoise"
-					baseFrequency="0.045"
-					numOctaves="3"
-					seed="4"
-					result="pn"></feTurbulence>
-				<feDisplacementMap in="SourceGraphic" in2="pn" scale="6"></feDisplacementMap>
-			</filter>
-			<filter id="soften" x="-20%" y="-20%" width="140%" height="140%">
-				<feGaussianBlur stdDeviation="3"></feGaussianBlur>
-			</filter>
-		</defs>
-
-		<circle cx={HOLE.cx} cy={HOLE.cy} r="150" fill="url(#clothfieldP)"></circle>
-		<circle cx={HOLE.cx} cy={HOLE.cy} r="200" fill="url(#lapP-bloom)"></circle>
-		<circle cx={HOLE.cx} cy={HOLE.cy} r={HOLE.r} fill="url(#lapP-light)" filter="url(#punch)"
-		></circle>
-		<circle cx={HOLE.cx} cy={HOLE.cy} r="48" fill="#ffffff" opacity="0.55" filter="url(#soften)"
-		></circle>
-
-		{/*
-		  글은 메인 → 목록 → 글 순으로 두 단 아래다. 정본의 "← 목록" 옆에
-		  한 단 더 올라가는 길을 붙인다 — 글에서 무대로 바로 돌아갈 수 있게.
-		*/}
-		<a href={`/list/${encodeURIComponent(post.category)}/`}>
-			<rect class="hit" x="12" y="18" width="72" height="24"></rect>
-			<text x={HEAD.back.x} y={HEAD.back.y} font-size="11.5" fill="#8f8c85" opacity="0.85"
-				>← 목록</text
+	{
+		sheets.map(({ edition, m, titleLines, titleY, dot }) => (
+			<svg
+				class={`head bleed-svg sheet-${edition.name}`}
+				viewBox={`0 0 ${edition.w} ${m.head.height}`}
+				data-h={m.head.height}
+				data-edition={edition.name}
 			>
-		</a>
-		<text x={HEAD.back.x + 52} y={HEAD.back.y} font-size="11.5" fill="#8f8c85" opacity="0.45"
-			>·</text
-		>
-		<a href="/">
-			<rect class="hit" x={HEAD.back.x + 36} y="18" width="56" height="24"></rect>
-			<text x={HEAD.back.x + 62} y={HEAD.back.y} font-size="11.5" fill="#8f8c85" opacity="0.85"
-				>메인</text
-			>
-		</a>
-		<text x={HEAD.back.x + 88} y={HEAD.back.y} font-size="11.5" fill="#8f8c85" opacity="0.45"
-			>·</text
-		>
-		{/*
-		  이 글을 쓰기 화면에 실어 연다. 읽다가 고칠 데를 봤을 때 누를 자리가
-		  여기 말고는 없다 — 돌아가는 길 둘과 같은 줄, 같은 무게로 앉힌다.
-		*/}
-		<a href={`/write/?post=${encodeURIComponent(slug)}`}>
-			<rect class="hit" x={HEAD.back.x + 94} y="18" width="52" height="24"></rect>
-			<text x={HEAD.back.x + 104} y={HEAD.back.y} font-size="11.5" fill="#8f8c85" opacity="0.85"
-				>수정</text
-			>
-		</a>
+				<defs>
+					<radialGradient id={`${edition.name}-lapP-light`}>
+						<stop offset="0%" stop-color="#fffdf4" />
+						<stop offset="70%" stop-color="#fffdf4" />
+						<stop offset="100%" stop-color="#eeddb8" />
+					</radialGradient>
+					<radialGradient id={`${edition.name}-lapP-bloom`}>
+						<stop offset="0%" stop-color="#d9a154" stop-opacity="0.45" />
+						<stop offset="45%" stop-color="#d9a154" stop-opacity="0.158" />
+						<stop offset="100%" stop-color="#d9a154" stop-opacity="0" />
+					</radialGradient>
+					<radialGradient id={`${edition.name}-clothfieldP`}>
+						<stop offset="0%" stop-color="#cfc9bd" stop-opacity="0" />
+						<stop offset="36%" stop-color="#cfc9bd" stop-opacity="0" />
+						<stop offset="46%" stop-color="#cfc9bd" stop-opacity="0.13" />
+						<stop offset="62%" stop-color="#cfc9bd" stop-opacity="0.08" />
+						<stop offset="100%" stop-color="#cfc9bd" stop-opacity="0" />
+					</radialGradient>
+					<radialGradient id={`${edition.name}-pvig`} cx="0.5" cy="0.42" r="0.8">
+						<stop offset="0%" stop-color="#000000" stop-opacity="0" />
+						<stop offset="68%" stop-color="#000000" stop-opacity="0" />
+						<stop offset="100%" stop-color="#000000" stop-opacity="0.2" />
+					</radialGradient>
+					<filter id={`${edition.name}-grainw`}>
+						<feTurbulence
+							type="fractalNoise"
+							baseFrequency="0.8"
+							numOctaves="2"
+							seed="7"
+							stitchTiles="stitch"
+						/>
+						<feColorMatrix
+							type="matrix"
+							values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.6 0.6 0.6 0 0"
+						/>
+					</filter>
+					<filter id={`${edition.name}-punch`} x="-15%" y="-15%" width="130%" height="130%">
+						<feTurbulence
+							type="fractalNoise"
+							baseFrequency="0.045"
+							numOctaves="3"
+							seed="4"
+							result="pn"
+						/>
+						<feDisplacementMap in="SourceGraphic" in2="pn" scale="6" />
+					</filter>
+					<filter id={`${edition.name}-soften`} x="-20%" y="-20%" width="140%" height="140%">
+						<feGaussianBlur stdDeviation="3" />
+					</filter>
+				</defs>
 
-		<text
-			class="serif"
-			x={HEAD.category.x}
-			y={HEAD.category.y}
-			text-anchor="middle"
-			font-size={HEAD.category.size}
-			font-weight="700"
-			fill={categoryDeepColor(post.category)}>{post.category}</text
-		>
+				<circle
+					cx={edition.hole.cx}
+					cy={edition.hole.cy}
+					r={edition.halo.field}
+					fill={`url(#${edition.name}-clothfieldP)`}
+				/>
+				<circle
+					cx={edition.hole.cx}
+					cy={edition.hole.cy}
+					r={edition.halo.bloom}
+					fill={`url(#${edition.name}-lapP-bloom)`}
+				/>
+				<circle
+					cx={edition.hole.cx}
+					cy={edition.hole.cy}
+					r={edition.hole.r}
+					fill={`url(#${edition.name}-lapP-light)`}
+					filter={`url(#${edition.name}-punch)`}
+				/>
+				<circle
+					cx={edition.hole.cx}
+					cy={edition.hole.cy}
+					r={edition.halo.core}
+					fill="#ffffff"
+					opacity="0.55"
+					filter={`url(#${edition.name}-soften)`}
+				/>
 
-		{/* 이 글의 좌표 — 윤곽이 가장 바깥 나이테, 점이 이 글이다. */}
-		<g opacity="0.9">
-			<circle
-				cx={MINIMAP.cx}
-				cy={MINIMAP.cy}
-				r={MINIMAP.r}
-				fill="none"
-				stroke="#2a2a2e"
-				stroke-width="1"></circle>
-			<circle cx={n(dot.x)} cy={n(dot.y)} r={MINIMAP.dot} fill={accent}></circle>
-			<text
-				x={MINIMAP.cx}
-				y={MINIMAP.captionY}
-				text-anchor="middle"
-				font-size={MINIMAP.captionSize}
-				fill="#8f8c85">이 글의 좌표</text
-			>
-		</g>
+				{/*
+				  글은 메인 → 목록 → 글 순으로 두 단 아래다. 정본의 "← 목록" 옆에
+				  한 단 더 올라가는 길을 붙인다 — 글에서 무대로 바로 돌아갈 수 있게.
+				*/}
+				<a href={`/list/${encodeURIComponent(post.category)}/`}>
+					<rect class="hit" x={m.head.back.x - 12} y="18" width="72" height="24" />
+					<text x={m.head.back.x} y={m.head.back.y} font-size="11.5" fill="#8f8c85" opacity="0.85">
+						← 목록
+					</text>
+				</a>
+				<text
+					x={m.head.back.x + 52}
+					y={m.head.back.y}
+					font-size="11.5"
+					fill="#8f8c85"
+					opacity="0.45"
+				>
+					·
+				</text>
+				<a href="/">
+					<rect class="hit" x={m.head.back.x + 36} y="18" width="56" height="24" />
+					<text
+						x={m.head.back.x + 62}
+						y={m.head.back.y}
+						font-size="11.5"
+						fill="#8f8c85"
+						opacity="0.85"
+					>
+						메인
+					</text>
+				</a>
+				<text
+					x={m.head.back.x + 88}
+					y={m.head.back.y}
+					font-size="11.5"
+					fill="#8f8c85"
+					opacity="0.45"
+				>
+					·
+				</text>
+				{/*
+				  이 글을 쓰기 화면에 실어 연다. 읽다가 고칠 데를 봤을 때 누를 자리가
+				  여기 말고는 없다 — 돌아가는 길 둘과 같은 줄, 같은 무게로 앉힌다.
+				*/}
+				<a href={`/write/?post=${encodeURIComponent(slug)}`}>
+					<rect class="hit" x={m.head.back.x + 94} y="18" width="52" height="24" />
+					<text
+						x={m.head.back.x + 104}
+						y={m.head.back.y}
+						font-size="11.5"
+						fill="#8f8c85"
+						opacity="0.85"
+					>
+						수정
+					</text>
+				</a>
 
-		<text class="serif" x={EDGE_L} font-size={HEAD.title.size} font-weight="700" fill="#e8e6e1">
-			{titleLines.map((line, i) => <tspan x={EDGE_L} y={titleY[i]!}>{line}</tspan>)}
-		</text>
-		<text class="mono" x={EDGE_L} y={HEAD.meta} font-size="11" fill="#8f8c85">{meta}</text>
+				<text
+					class="serif"
+					x={m.head.category.x}
+					y={m.head.category.y}
+					text-anchor="middle"
+					font-size={m.head.category.size}
+					font-weight="700"
+					fill={categoryDeepColor(post.category)}
+				>
+					{post.category}
+				</text>
 
-		<rect class="bleed-cover" x="0" y="0" width="700" height={HEAD.height} fill="url(#pvig)"></rect>
-		<rect
-			class="bleed-cover"
-			x="0"
-			y="0"
-			width="700"
-			height={HEAD.height}
-			filter="url(#grainw)"
-			opacity="0.05"></rect>
-		<line
-			class="bleed-band"
-			data-at={BAND[0]}
-			x1={BAND[0]}
-			y1="0"
-			x2={BAND[0]}
-			y2={HEAD.height}
-			stroke="#ffffff"
-			stroke-width="0.6"
-			opacity="0.03"></line>
-		<line
-			class="bleed-band"
-			data-at={BAND[1]}
-			x1={BAND[1]}
-			y1="0"
-			x2={BAND[1]}
-			y2={HEAD.height}
-			stroke="#ffffff"
-			stroke-width="0.9"
-			opacity="0.042"></line>
-	</svg>
+				{/* 이 글의 좌표 — 윤곽이 가장 바깥 나이테, 점이 이 글이다. */}
+				<g opacity="0.9">
+					<circle
+						cx={m.minimap.cx}
+						cy={m.minimap.cy}
+						r={m.minimap.r}
+						fill="none"
+						stroke="#2a2a2e"
+						stroke-width="1"
+					/>
+					<circle cx={n(dot.x)} cy={n(dot.y)} r={m.minimap.dot} fill={accent} />
+					<text
+						x={m.minimap.cx}
+						y={m.minimap.captionY}
+						text-anchor="middle"
+						font-size={m.minimap.captionSize}
+						fill="#8f8c85"
+					>
+						이 글의 좌표
+					</text>
+				</g>
+
+				<text
+					class="serif"
+					x={edition.edgeL}
+					font-size={m.head.title.size}
+					font-weight="700"
+					fill="#e8e6e1"
+				>
+					{titleLines.map((line, i) => (
+						<tspan x={edition.edgeL} y={titleY[i]!}>
+							{line}
+						</tspan>
+					))}
+				</text>
+				<text class="mono" x={edition.edgeL} y={m.head.meta} font-size="11" fill="#8f8c85">
+					{meta}
+				</text>
+
+				<rect
+					class="bleed-cover"
+					x="0"
+					y="0"
+					width={edition.w}
+					height={m.head.height}
+					fill={`url(#${edition.name}-pvig)`}
+				/>
+				<rect
+					class="bleed-cover"
+					x="0"
+					y="0"
+					width={edition.w}
+					height={m.head.height}
+					filter={`url(#${edition.name}-grainw)`}
+					opacity="0.05"
+				/>
+				{edition.band.map((at, i) => (
+					<line
+						class="bleed-band"
+						data-at={at}
+						x1={at}
+						y1="0"
+						x2={at}
+						y2={m.head.height}
+						stroke="#ffffff"
+						stroke-width={i === 0 ? 0.6 : 0.9}
+						opacity={i === 0 ? 0.03 : 0.042}
+					/>
+				))}
+			</svg>
+		))
+	}
 
 	<div class="body"><slot /></div>
 
@@ -341,240 +444,243 @@ const dot = minimapDot(post);
 		)
 	}
 
-	<svg class="tail bleed-svg" viewBox={`0 0 700 ${tail.height}`} data-h={tail.height}>
-		<defs>
-			<radialGradient id="bvigP" cx="0.5" cy="0.42" r="0.8">
-				<stop offset="0%" stop-color="#000000" stop-opacity="0"></stop>
-				<stop offset="68%" stop-color="#000000" stop-opacity="0"></stop>
-				<stop offset="100%" stop-color="#000000" stop-opacity="0.3"></stop>
-			</radialGradient>
-			{/* 달길 기둥 — 수평선 쪽이 밝고 관찰자 쪽으로 잦아든다. */}
-			<linearGradient id="gladecolP" x1="0" y1="0" x2="0" y2="1">
-				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.5"></stop>
-				<stop offset="55%" stop-color="#d9a154" stop-opacity="0.16"></stop>
-				<stop offset="100%" stop-color="#d9a154" stop-opacity="0.03"></stop>
-			</linearGradient>
-			{/* 그림자 띠 — 가운데만 짙고 가장자리로 없어진다. 물 위의 그림자에는 테두리가 없다. */}
-			<radialGradient id="gladebandP">
-				<stop offset="0%" stop-color="#131316" stop-opacity="1"></stop>
-				<stop offset="45%" stop-color="#131316" stop-opacity="0.82"></stop>
-				<stop offset="100%" stop-color="#131316" stop-opacity="0"></stop>
-			</radialGradient>
-			<filter id="softenP" x="-20%" y="-20%" width="140%" height="140%">
-				<feGaussianBlur stdDeviation="3"></feGaussianBlur>
-			</filter>
-		</defs>
-
-		{
-			neighbors.length > 0 && (
-				<>
-					<text
-						x={EDGE_L}
-						y={tail.label}
-						font-size="10.5"
-						letter-spacing="3"
-						fill="#8f8c85"
-					>
-						가까운 글
-					</text>
-					<text
-						x={EDGE_R}
-						y={tail.label}
-						text-anchor="end"
-						font-size="10.5"
-						fill="#8f8c85"
-						opacity="0.8"
-					>
-						이 글의 좌표 기준 · 빌드 때 고정
-					</text>
-				</>
-			)
-		}
-		{
-			neighbors.map((near, i) => (
-				<a href={`/blog/${near.slug}/`}>
-					<rect
-						class="hit"
-						x={EDGE_L}
-						y={tail.rows[i]!.dot - 15}
-						width={EDGE_R - EDGE_L}
-						height="30"
-					/>
-					<circle cx="56" cy={tail.rows[i]!.dot} r="3" fill={near.color} />
-					<text x="76" y={tail.rows[i]!.title} font-size="13.5" fill="#d8d5cd">
-						{near.title}
-					</text>
-					<text
-						class="mono"
-						x={EDGE_R}
-						y={tail.rows[i]!.title}
-						text-anchor="end"
-						font-size="11"
-						fill="#8f8c85"
-					>
-						{`${near.percent}%`}
-					</text>
-				</a>
-			))
-		}
-
-		{
-			tail.discovery && (
-				<>
-					<text
-						x={EDGE_L}
-						y={tail.discovery.label}
-						font-size="10.5"
-						letter-spacing="3"
-						fill="#8f8c85"
-					>
-						다른 자리에서 닮은 글
-					</text>
-					<text
-						x={EDGE_R}
-						y={tail.discovery.label}
-						text-anchor="end"
-						font-size="10.5"
-						fill="#8f8c85"
-						opacity="0.8"
-					>
-						화면에서는 멀다 · 글이 이어 준다
-					</text>
-					{discoveries.map((found, i) => (
-						<a href={`/blog/${found.slug}/`}>
-							<rect
-								class="hit"
-								x={EDGE_L}
-								y={tail.discovery!.rows[i]!.dot - 15}
-								width={EDGE_R - EDGE_L}
-								height="30"
-							/>
-							{/* 빈 점 — 가까운 글의 채운 점과 달리 거리로 이어진 게 아니라는 표시다. */}
-							<circle
-								cx="56"
-								cy={tail.discovery!.rows[i]!.dot}
-								r="3"
-								fill="none"
-								stroke={found.color}
-								stroke-width="1.5"
-							/>
-							<text x="76" y={tail.discovery!.rows[i]!.title} font-size="13.5" fill="#d8d5cd">
-								{found.title}
-							</text>
-							<text
-								x={EDGE_R}
-								y={tail.discovery!.rows[i]!.title}
-								text-anchor="end"
-								font-size="11"
-								fill="#8f8c85"
-							>
-								{found.category}
-							</text>
-						</a>
-					))}
-				</>
-			)
-		}
-
-		<line
-			class="bleed"
-			x1="0"
-			x2="700"
-			y1={tail.horizon}
-			y2={tail.horizon}
-			stroke="#2a2a2e"
-			stroke-width="1.5"
-			opacity="0.55"></line>
-
-		{/*
-		  바다 — 무대와 같은 먹선 파도. 자리와 픽셀 크기는 post-screen.ts가 잡는다.
-		  글 뒤에 오는 코다라 무대보다 한 겹 물러나 앉는다.
-		*/}
-		<g id="seaP" opacity="0.62">
-			<foreignObject data-sea x="0" y={tail.horizon} width="700" height={TAIL_METRICS.sea}>
-				<canvas style="display:block;width:100%;height:100%"></canvas>
-			</foreignObject>
-			{/*
-			  윤슬 — 정본 깊이(수평선 518 기준)로 그려 두고 통째로 눌러 꼬리에 앉힌다.
-			  파도 캔버스가 받는 눌림과 같은 값이라 띠와 낱알이 먹선 위에 그대로 얹힌다.
-			*/}
-			<g
-				data-glade
-				transform={`translate(0,${n(tail.horizon - HORIZON_Y * SEA_SQUASH)}) scale(1,${n(SEA_SQUASH)})`}
+	{
+		sheets.map(({ edition, m, tail, neighbors, discoveries }) => (
+			<svg
+				class={`tail bleed-svg sheet-${edition.name}`}
+				viewBox={`0 0 ${edition.w} ${tail.height}`}
+				data-h={tail.height}
+				data-edition={edition.name}
 			>
-				<path data-glade-col d="" fill="url(#gladecolP)" filter="url(#softenP)"></path>
-				<ellipse
-					data-glade-core
-					cx="350"
-					cy="552"
-					rx="24"
-					ry="4.5"
-					fill="#fffdf4"
-					opacity="0.45"
-					filter="url(#softenP)"></ellipse>
-				<g>
-					{
-						Array.from({ length: GLADE_BAND_COUNT }, () => (
-							<ellipse data-glade-band cx="350" fill="url(#gladebandP)" opacity="0" />
-						))
-					}
-				</g>
-				<g data-glade-glints fill="#d9a154">
-					{
-						GLADE_GLINTS.map((glint) => (
-							<rect
-								y={glint.y.toFixed(1)}
-								height={glint.h.toFixed(1)}
-								rx={(glint.h / 2).toFixed(1)}
-								opacity="0"
-							/>
-						))
-					}
-				</g>
-			</g>
-		</g>
+				<defs>
+					<radialGradient id={`${edition.name}-bvigP`} cx="0.5" cy="0.42" r="0.8">
+						<stop offset="0%" stop-color="#000000" stop-opacity="0" />
+						<stop offset="68%" stop-color="#000000" stop-opacity="0" />
+						<stop offset="100%" stop-color="#000000" stop-opacity="0.3" />
+					</radialGradient>
+					{/* 달길 기둥 — 수평선 쪽이 밝고 관찰자 쪽으로 잦아든다. */}
+					<linearGradient id={`${edition.name}-gladecolP`} x1="0" y1="0" x2="0" y2="1">
+						<stop offset="0%" stop-color="#d9a154" stop-opacity="0.5" />
+						<stop offset="55%" stop-color="#d9a154" stop-opacity="0.16" />
+						<stop offset="100%" stop-color="#d9a154" stop-opacity="0.03" />
+					</linearGradient>
+					{/* 그림자 띠 — 가운데만 짙고 가장자리로 없어진다. 물 위의 그림자에는 테두리가 없다. */}
+					<radialGradient id={`${edition.name}-gladebandP`}>
+						<stop offset="0%" stop-color="#131316" stop-opacity="1" />
+						<stop offset="45%" stop-color="#131316" stop-opacity="0.82" />
+						<stop offset="100%" stop-color="#131316" stop-opacity="0" />
+					</radialGradient>
+					<filter id={`${edition.name}-softenP`} x="-20%" y="-20%" width="140%" height="140%">
+						<feGaussianBlur stdDeviation="3" />
+					</filter>
+				</defs>
 
-		<rect class="bleed-cover" x="0" y="0" width="700" height={tail.height} fill="url(#bvigP)"></rect>
-		<rect
-			class="bleed-cover"
-			x="0"
-			y="0"
-			width="700"
-			height={tail.height}
-			filter="url(#grainw)"
-			opacity="0.05"></rect>
-		<line
-			class="bleed-band"
-			data-at={BAND[0]}
-			x1={BAND[0]}
-			y1="0"
-			x2={BAND[0]}
-			y2={tail.height}
-			stroke="#ffffff"
-			stroke-width="0.6"
-			opacity="0.04"></line>
-		<line
-			class="bleed-band"
-			data-at={BAND[1]}
-			x1={BAND[1]}
-			y1="0"
-			x2={BAND[1]}
-			y2={tail.height}
-			stroke="#ffffff"
-			stroke-width="0.9"
-			opacity="0.056"></line>
-	</svg>
+				{neighbors.length > 0 && (
+					<>
+						<text x={edition.edgeL} y={tail.label} font-size="10.5" letter-spacing="3" fill="#8f8c85">
+							가까운 글
+						</text>
+						<text
+							x={edition.edgeR}
+							y={tail.label}
+							text-anchor="end"
+							font-size="10.5"
+							fill="#8f8c85"
+							opacity="0.8"
+						>
+							{edition.name === 'narrow' ? '빌드 때 고정' : '이 글의 좌표 기준 · 빌드 때 고정'}
+						</text>
+					</>
+				)}
+				{neighbors.map((near, i) => (
+					<a href={`/blog/${near.slug}/`}>
+						<rect
+							class="hit"
+							x={edition.edgeL}
+							y={tail.rows[i]!.dot - 15}
+							width={edition.edgeR - edition.edgeL}
+							height="30"
+						/>
+						<circle cx={m.tail.dotX} cy={tail.rows[i]!.dot} r={m.tail.dotR} fill={near.color} />
+						<text x={m.tail.textX} y={tail.rows[i]!.title} font-size="13.5" fill="#d8d5cd">
+							{near.title}
+						</text>
+						<text
+							class="mono"
+							x={edition.edgeR}
+							y={tail.rows[i]!.title}
+							text-anchor="end"
+							font-size="11"
+							fill="#8f8c85"
+						>
+							{`${near.percent}%`}
+						</text>
+					</a>
+				))}
+
+				{tail.discovery && (
+					<>
+						<text
+							x={edition.edgeL}
+							y={tail.discovery.label}
+							font-size="10.5"
+							letter-spacing="3"
+							fill="#8f8c85"
+						>
+							다른 자리에서 닮은 글
+						</text>
+						{edition.name === 'wide' && (
+							<text
+								x={edition.edgeR}
+								y={tail.discovery.label}
+								text-anchor="end"
+								font-size="10.5"
+								fill="#8f8c85"
+								opacity="0.8"
+							>
+								화면에서는 멀다 · 글이 이어 준다
+							</text>
+						)}
+						{discoveries.map((found, i) => (
+							<a href={`/blog/${found.slug}/`}>
+								<rect
+									class="hit"
+									x={edition.edgeL}
+									y={tail.discovery!.rows[i]!.dot - 15}
+									width={edition.edgeR - edition.edgeL}
+									height="30"
+								/>
+								{/* 빈 점 — 가까운 글의 채운 점과 달리 거리로 이어진 게 아니라는 표시다. */}
+								<circle
+									cx={m.tail.dotX}
+									cy={tail.discovery!.rows[i]!.dot}
+									r={m.tail.dotR}
+									fill="none"
+									stroke={found.color}
+									stroke-width="1.5"
+								/>
+								<text
+									x={m.tail.textX}
+									y={tail.discovery!.rows[i]!.title}
+									font-size="13.5"
+									fill="#d8d5cd"
+								>
+									{found.title}
+								</text>
+								<text
+									x={edition.edgeR}
+									y={tail.discovery!.rows[i]!.title}
+									text-anchor="end"
+									font-size="11"
+									fill="#8f8c85"
+								>
+									{found.category}
+								</text>
+							</a>
+						))}
+					</>
+				)}
+
+				<line
+					class="bleed"
+					x1="0"
+					x2={edition.w}
+					y1={tail.horizon}
+					y2={tail.horizon}
+					stroke="#2a2a2e"
+					stroke-width="1.5"
+					opacity="0.55"
+				/>
+
+				{/*
+				  바다 — 무대와 같은 먹선 파도. 자리와 픽셀 크기는 post-screen.ts가 잡는다.
+				  글 뒤에 오는 코다라 무대보다 한 겹 물러나 앉는다.
+				*/}
+				<g class="seaP" opacity="0.62">
+					<foreignObject data-sea x="0" y={tail.horizon} width={edition.w} height={m.tail.sea}>
+						<canvas style="display:block;width:100%;height:100%" />
+					</foreignObject>
+					{/*
+					  윤슬 — 정본 깊이(수평선 518 기준)로 그려 두고 통째로 눌러 꼬리에 앉힌다.
+					  파도 캔버스가 받는 눌림과 같은 값이라 띠와 낱알이 먹선 위에 그대로 얹힌다.
+					  좁은 판에서는 달길이 그 판의 한가운데로 옮겨 앉는다(정본 350 → 판의 빛구멍 자리).
+					*/}
+					<g
+						data-glade
+						transform={`translate(${n(edition.hole.cx - 350)},${n(tail.horizon - HORIZON_Y * SEA_SQUASH)}) scale(1,${n(SEA_SQUASH)})`}
+					>
+						<path data-glade-col d="" fill={`url(#${edition.name}-gladecolP)`} filter={`url(#${edition.name}-softenP)`} />
+						<ellipse
+							data-glade-core
+							cx="350"
+							cy="552"
+							rx="24"
+							ry="4.5"
+							fill="#fffdf4"
+							opacity="0.45"
+							filter={`url(#${edition.name}-softenP)`}
+						/>
+						<g>
+							{Array.from({ length: GLADE_BAND_COUNT }, () => (
+								<ellipse data-glade-band cx="350" fill={`url(#${edition.name}-gladebandP)`} opacity="0" />
+							))}
+						</g>
+						<g data-glade-glints fill="#d9a154">
+							{GLADE_GLINTS.map((glint) => (
+								<rect
+									y={glint.y.toFixed(1)}
+									height={glint.h.toFixed(1)}
+									rx={(glint.h / 2).toFixed(1)}
+									opacity="0"
+								/>
+							))}
+						</g>
+					</g>
+				</g>
+
+				<rect
+					class="bleed-cover"
+					x="0"
+					y="0"
+					width={edition.w}
+					height={tail.height}
+					fill={`url(#${edition.name}-bvigP)`}
+				/>
+				<rect
+					class="bleed-cover"
+					x="0"
+					y="0"
+					width={edition.w}
+					height={tail.height}
+					filter={`url(#${edition.name}-grainw)`}
+					opacity="0.05"
+				/>
+				{edition.band.map((at, i) => (
+					<line
+						class="bleed-band"
+						data-at={at}
+						x1={at}
+						y1="0"
+						x2={at}
+						y2={tail.height}
+						stroke="#ffffff"
+						stroke-width={i === 0 ? 0.6 : 0.9}
+						opacity={i === 0 ? 0.04 : 0.056}
+					/>
+				))}
+			</svg>
+		))
+	}
 
 	<nav class="post-index" aria-label="이 글의 자리">
 		<a href={`/list/${encodeURIComponent(post.category)}/`}>{post.category} 목록 ({category?.count ?? 0}편)</a>
 	</nav>
 </article>
-
 <style>
 	/*
-	  글 화면도 메인·목록과 같은 배율(min(폭/700, 높이/790))로 큰다.
+	  글 화면은 판의 폭(700 · 390)에 맞춰 큰다.
 	  머리·꼬리는 SVG라 viewBox를 벌려 화면 끝까지 가고, 본문은 그냥 글이라
-	  기둥(700) 그대로 두고 article 통째로 zoom을 먹인다 — 둘이 같은 배율이라 줄이 맞는다.
+	  기둥 그대로 두고 article 통째로 zoom을 먹인다 — 둘이 같은 배율이라 줄이 맞는다.
 	  실제 폭·배율은 post-screen.ts의 layout()이 잡는다.
 	*/
 	.post {
@@ -586,6 +692,16 @@ const dot = minimapDot(post);
 		display: block;
 		width: 100%;
 		height: auto;
+	}
+
+	/*
+	  두 판 중 하나만 선다(`page.ts`). 폰에서 700 기둥을 그대로 두면 본문 15px이
+	  8px로 줄어든다 — 좁은 판은 기둥을 390으로 줄여 글자를 제 크기로 세운다.
+	  고르는 규칙은 이 장의 맨 끝에 있다 — 미디어 쿼리는 특정도를 더해주지 않아서
+	  기둥 폭을 되돌리려면 정본 규칙들보다 뒤에 서야 한다.
+	*/
+	.sheet-narrow {
+		display: none;
 	}
 
 	.bleed-svg text {
@@ -608,7 +724,7 @@ const dot = minimapDot(post);
 	}
 
 	/* 바다·윤슬도 풍경이다 — 커서를 가로채지 않는다. */
-	#seaP {
+	.seaP {
 		pointer-events: none;
 	}
 
@@ -802,6 +918,34 @@ const dot = minimapDot(post);
 		.bleed-svg a text,
 		.strip {
 			transition: none;
+		}
+	}
+
+	/*
+	  좁은 판 — 기둥이 390이 된다. 경계 720px은 `page.ts`의 NARROW_AT과 짝이다
+	  (미디어 쿼리는 상수를 못 읽으니 한쪽을 고치면 다른 쪽도 고쳐야 한다).
+	*/
+	@media (max-width: 719px) {
+		.sheet-wide {
+			display: none;
+		}
+
+		.sheet-narrow {
+			display: block;
+		}
+
+		.post {
+			width: 390px;
+		}
+
+		.body {
+			width: 390px;
+			padding: 8px 24px 20px 24px;
+		}
+
+		.strip-wrap {
+			width: 390px;
+			padding: 0 24px 34px 24px;
 		}
 	}
 </style>
