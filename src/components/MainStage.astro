@@ -316,6 +316,13 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		<circle cx="350" cy="235" r="95" fill="url(#hap-light)" filter="url(#punch)"></circle>
 		<circle cx="350" cy="235" r="48" fill="#ffffff" opacity="0.55" filter="url(#soften)"></circle>
 
+		{/*
+		  배롱나무 — 오른쪽 하늘의 초상. 가지는 화면 밖 벽에서 들어오고, 꽃은 바다와
+		  같은 바람 하나를 받는다. 자리와 흔들림은 flower-scene.ts가 잡는다.
+		  글 점 아래에 둔다 — 무대의 주인은 글이다. 손도 타지 않게 비켜선다.
+		*/}
+		<g id="flower" data-flower pointer-events="none"></g>
+
 		{
 			posts.map((post) => (
 				<g
@@ -457,6 +464,9 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 				<rect id="cli-caret" x="76" y="484" width="7" height="16" fill="#e8e6e1" opacity="0"></rect>
 			</g>
 		</g>
+
+		{/* 낙화와 파문 — 물 위에서 벌어지니 바다·윤슬보다 위에 있어야 한다. */}
+		<g id="petals" data-petals pointer-events="none"></g>
 
 		<g id="panel" opacity="0" transform="translate(0,290)">
 			<path id="p-wavefill" d="M0,790 L0,536 L700,536 L700,790 Z" fill="#131316" opacity="0.97"></path>
