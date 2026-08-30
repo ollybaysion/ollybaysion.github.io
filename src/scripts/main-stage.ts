@@ -326,10 +326,26 @@ function start(svg: SVGSVGElement): void {
     });
   }
 
+  /**
+   * 실제로 어딘가로 데려가는 명령. 앞의 `/`는 있어도 없어도 같다.
+   * 나머지 명령 체계는 아직 미확정이라 확인 모달까지만 간다.
+   */
+  const ROUTES: Record<string, string> = {
+    write: "/write/",
+    post: "/write/",
+  };
+
   function execCommand(): void {
     const typed = command.trim();
     if (!typed) return;
     command = "";
+
+    const route = ROUTES[typed.replace(/^\//, "").toLowerCase()];
+    if (route) {
+      window.location.href = route;
+      return;
+    }
+
     modalCmd.textContent = `❯ ${typed}`;
     modalState.open = true;
   }
