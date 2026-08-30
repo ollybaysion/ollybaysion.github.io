@@ -7,7 +7,7 @@
  *
  * zoom을 모르는 브라우저에서는 정본 크기(700px 기둥) 그대로 보인다.
  */
-import { SEA_ART_W } from "../lib/stage/sea.ts";
+import { SEA_ART_W } from "../lib/stage/sea-bands.ts";
 
 /** 정본 좌표계. 메인의 세로(790)를 같이 봐야 배율이 세 화면에서 같아진다. */
 const VIEW_W = 700;

@@ -1,22 +1,30 @@
 {
-  "name": "DS Kim",
-  "tagline": "기술과 커피를 기록합니다",
-  "social": {
-    "github": "https://github.com/ollybaysion",
-    "instagram": "https://instagram.com/itsme._ysion"
-  },
-  "alumni": [
-    {
-      "years": "2018–2024",
-      "what": "SKKU Semiconductor System Engineering"
-    },
-    {
-      "years": "2024–",
-      "what": "Samsung Electronics AX/PI Center"
-    },
-    {
-      "years": "2026",
-      "what": "SCA Brewing Professional"
-    }
-  ]
+	"name": "DS Kim",
+	"tagline": {
+		"lead": "지양",
+		"gloss": "止揚 · Aufheben",
+		"note": "꽃봉오리는 꽃이 피면 사라지고, 사라진 것이 꽃 안에 남는다",
+		"source": "헤겔 『정신현상학』"
+	},
+	"description": "기술과 커피를 기록하는 블로그",
+	"social": {
+		"github": "https://github.com/ollybaysion",
+		"instagram": "https://instagram.com/itsme._ysion"
+	},
+	"alumni": [
+		{
+			"years": "2018–2024",
+			"what": "SKKU Semiconductor System Engineering"
+		},
+		{
+			"years": "2024–",
+			"what": "Samsung Electronics AX/PI Center"
+		}
+	],
+	"certificates": [
+		{
+			"years": "2026",
+			"what": "SCA Brewing Professional"
+		}
+	]
 }

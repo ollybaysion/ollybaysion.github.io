@@ -4,10 +4,23 @@
  * 정본이 지어낸 앵커 목록만 카테고리 등록부로 갈아끼웠다.
  *
  * 호버 = 빛구멍과 커서를 잇는 막, 막 범위 안 글 점등.
- * 클릭 = 유사도 파도 목록(거리순), 다른 지점 클릭 = 리로드, 내리기 = 닫기.
+ * 클릭 = 점 위면 그 글로, 빈 자리면 유사도 파도 목록(거리순).
+ *        다른 지점 클릭 = 리로드, 내리기 = 닫기.
  * CLI = 데모. 명령 체계가 미확정이라 입력 확인 모달까지만 간다.
  */
-import { angleColor, nearestCategory } from "../lib/stage/palette.ts";
+import {
+  angleColor,
+  angleColorWashed,
+  nearestCategory,
+} from "../lib/stage/palette.ts";
+import {
+  createSea,
+  flashAt,
+  gladeColumnPath,
+  gladeHalfWidth,
+  GLADE_GLINTS,
+  HORIZON_Y,
+} from "../lib/stage/sea.ts";
 
 /** 정본 좌표계. 세로는 이 값을 그대로 쓰고, 가로만 화면 비율에 맞춰 벌어진다. */
 const VIEW_W = 700;
@@ -32,6 +45,18 @@ const R2 = 4;
 const GOO_V = 0.66;
 const GOO_H = 2.4;
 
+/** 점이 커서 쪽으로 끌려오는 거리와 그 감쇠 폭. */
+const PULL_MAX = 10;
+const PULL_SIGMA = 75;
+/**
+ * 점을 눌렀다고 볼 반경 — **그려진 자리** 기준이다.
+ *
+ * 점은 커서 쪽으로 끌려와서 원래 좌표와 화면에 보이는 자리가 다르다. 사람은 보이는 걸
+ * 겨냥하니 판정도 보이는 자리에서 해야 한다. 손가락은 커서보다 굵어 넉넉히 잡는다.
+ */
+const HIT_R = 8;
+const HIT_R_TOUCH = 16;
+
 
 interface Post {
   angle: number;
@@ -52,6 +77,28 @@ interface Row {
 
 function clamp1(n: number): number {
   return Math.max(-1, Math.min(1, n));
+}
+
+/**
+ * 커서에 끌려온 점의 자리와 원래 자리에서 잰 거리.
+ *
+ * 그리기와 클릭 판정이 같은 식을 봐야 한다 — 갈라지면 보이는 점과 눌리는 점이 어긋난다.
+ */
+function pulled(
+  post: Post,
+  cx: number,
+  cy: number,
+  op: number,
+): { x: number; y: number; dist: number } {
+  const dx = cx - post.x;
+  const dy = cy - post.y;
+  const dist = Math.max(1, Math.hypot(dx, dy));
+  const pull = Math.exp(-((dist / PULL_SIGMA) ** 2)) * PULL_MAX * op;
+  return {
+    x: post.x + (dx / dist) * pull,
+    y: post.y + (dy / dist) * pull,
+    dist,
+  };
 }
 
 function start(svg: SVGSVGElement): void {
@@ -82,11 +129,14 @@ function start(svg: SVGSVGElement): void {
   const bloomStops = [
     ...svg.querySelectorAll<SVGStopElement>("#hap-bloom stop"),
   ];
-  const reflections = [...svg.querySelectorAll<SVGRectElement>(".refl")];
+  /** 광원 안쪽 — 색이 씻긴 자리들. 얼마나 바랠지는 각자 data-wash에 적혀 있다. */
+  const washed = [...svg.querySelectorAll<SVGElement>("[data-wash]")];
   const cliLine = svg.querySelector<SVGGElement>("#cli-line")!;
   const sitename = svg.querySelector<SVGGElement>("#sitename")!;
   const social = svg.querySelector<SVGGElement>("#social")!;
   const alumniCol = svg.querySelector<SVGGElement>("#alumni-col");
+  /** 좁아지면 물러나는 좌측 열 조각들 — 제사의 뜻풀이와 명함. */
+  const retreating = [...svg.querySelectorAll<SVGElement>("[data-min-w]")];
   const panel = svg.querySelector<SVGGElement>("#panel")!;
   const waveFill = svg.querySelector<SVGPathElement>("#p-wavefill")!;
   const waveLine = svg.querySelector<SVGPathElement>("#p-waveline")!;
@@ -113,9 +163,38 @@ function start(svg: SVGSVGElement): void {
   const bleeds = [...svg.querySelectorAll<SVGLineElement>(".bleed")];
   const covers = [...svg.querySelectorAll<SVGRectElement>(".cover")];
   const bands = [...svg.querySelectorAll<SVGLineElement>(".band")];
-  const sea = svg.querySelector<SVGGElement>("#sea")!;
-  const seaClip = svg.querySelector<SVGRectElement>("#seaclip-rect")!;
-  const seaFloor = svg.querySelector<SVGRectElement>("#sea-floor")!;
+  // 바다 — 수평선 아래 전폭 캔버스. 그리기는 무대 단위로 하고, 캔버스가 픽셀을 맡는다.
+  const seaFo = svg.querySelector<SVGForeignObjectElement>("#sea-fo")!;
+  const seaCv = seaFo.querySelector("canvas")!;
+  const seaG = seaCv.getContext("2d")!;
+  const seaView = { w: VIEW_W, h: 200, scale: 1 };
+  const sea = createSea();
+
+  // 윤슬 — 달길 기둥·중심·그림자 띠·물비늘. 자리는 미리 깔려 있고 여기서 켜고 끈다.
+  const gladeCol = svg.querySelector<SVGPathElement>("#glade-col")!;
+  const gladeCore = svg.querySelector<SVGEllipseElement>("#glade-core")!;
+  const gladeBands = [
+    ...svg.querySelectorAll<SVGRectElement>("#glade-bands rect"),
+  ];
+  const gladeGlintsG = svg.querySelector<SVGGElement>("#glade-glints")!;
+  const gladeGlints = [
+    ...gladeGlintsG.querySelectorAll<SVGRectElement>("rect"),
+  ];
+  const gladeStops = [
+    ...svg.querySelectorAll<SVGStopElement>("#gladecol stop"),
+  ];
+
+  /**
+   * 모션 줄이기 — 파도는 흐르지 않는다.
+   *
+   * 세 장을 일생의 서로 다른 지점에 세워 두고, 윤슬 시각을 0에 고정해 정지화 한 장만
+   * 그린다. 그 한 장은 `layout()`이 그린다 — 화면이 바뀌면 다시 한 장.
+   */
+  const reduceMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  const stillClock = performance.now() / 1000;
+  if (reduceMotion) sea.freeze(stillClock);
 
   /**
    * 무대를 뷰포트에 맞춘다.
@@ -154,18 +233,20 @@ function start(svg: SVGSVGElement): void {
       band.setAttribute("y1", String(view.minY));
       band.setAttribute("y2", String(view.minY + h));
     }
-    // 바다는 1000단위 폭이라 가로로 늘려 화면 끝까지 채운다.
-    sea.setAttribute(
-      "transform",
-      `translate(${left},457) scale(${w / 1000},0.7)`,
-    );
-    seaClip.setAttribute("x", String(left));
-    seaClip.setAttribute("width", String(w));
-    seaClip.setAttribute("height", String(Math.max(200, view.minY + h - 590)));
-    // 바다 그림의 마지막 밴드는 y≈966에서 끝난다. 그 아래를 같은 색으로 메운다(살짝 겹쳐 이음매를 지운다).
-    seaFloor.setAttribute("x", String(left));
-    seaFloor.setAttribute("width", String(w));
-    seaFloor.setAttribute("height", String(Math.max(0, view.minY + h - 960)));
+    // 바다 — 수평선부터 화면 바닥까지 전폭. 그리기 좌표는 무대 단위 그대로 두고,
+    // 캔버스 픽셀만 화면 배율(dpr 포함)로 잡는다.
+    const seaH = Math.max(120, view.minY + h - HORIZON_Y);
+    seaFo.setAttribute("x", String(left));
+    seaFo.setAttribute("width", String(w));
+    seaFo.setAttribute("height", String(seaH));
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.7);
+    // 무대 단위 → 화면 px. 비율을 지키는 매핑이라 가로세로가 같다.
+    const px = box.height / h;
+    seaView.w = w;
+    seaView.h = seaH;
+    seaView.scale = px * dpr;
+    seaCv.width = Math.max(1, Math.round(w * px * dpr));
+    seaCv.height = Math.max(1, Math.round(seaH * px * dpr));
 
     // CLI ❯와 입력은 화면 왼쪽 끝에 붙는다. 파도 목록 행은 가운데 열에 그대로 남는다.
     // 정본 x가 이미 52(EDGE)라 화면 왼쪽 끝만큼만 밀면 된다.
@@ -176,18 +257,86 @@ function start(svg: SVGSVGElement): void {
       "transform",
       `translate(${left + EDGE},${view.minY + 70})`,
     );
+    // 시안의 116은 제사가 한 줄일 때의 자리다. 제사 아래에 뜻이 나타날 자리를 비워 두려고
+    // 아이콘 줄을 그만큼 내렸다 — 뜻이 떠도 아이콘을 덮지 않는다.
     social.setAttribute(
       "transform",
-      `translate(${left + EDGE},${view.minY + 116})`,
+      `translate(${left + EDGE},${view.minY + 134})`,
     );
     if (alumniCol) {
       alumniCol.setAttribute("transform", `translate(${left + EDGE},196)`);
-      // 물러나는 기준은 실제 글자 길이에서 나온다(MainStage의 ALUMNI_MIN_W).
-      alumniCol.classList.toggle(
-        "is-hidden",
-        w < Number(alumniCol.dataset.minW),
-      );
     }
+    // 물러나는 기준은 실제 글자 길이에서 나온다(MainStage의 needW).
+    for (const el of retreating) {
+      el.classList.toggle("is-hidden", w < Number(el.dataset.minW));
+    }
+
+    // 캔버스가 새로 잡혔으니 한 장 다시 그린다. 모션을 줄인 화면에서는 이게 유일한 한 장이다.
+    renderSea(performance.now() / 1000);
+  }
+
+  /**
+   * 바다 한 프레임과 그 위의 윤슬.
+   *
+   * 윤슬이 물리는 건 능선 위상이 아니라 `sea.draw`가 돌려주는 이번 프레임의 파도 목록이다 —
+   * 화면에 그려진 먹선이 그 깊이를 지날 때 띠가 지고 낱알이 켜진다. 위상으로 물리면
+   * 빛이 파도보다 먼저 켜지거나 늦게 켜져서 둘이 남남이 된다.
+   */
+  function renderSea(t: number): void {
+    const clock = reduceMotion ? stillClock : t;
+    seaG.setTransform(seaView.scale, 0, 0, seaView.scale, 0, 0);
+    seaG.clearRect(0, 0, seaView.w, seaView.h);
+    const frameSea = sea.draw(
+      seaG,
+      seaView.w,
+      seaView.h,
+      clock,
+      Date.now() / 1000,
+    );
+    renderGlade(reduceMotion ? 0 : t, frameSea.wind, frameSea.waves);
+  }
+
+  function renderGlade(
+    t: number,
+    wind: number,
+    waves: readonly { y: number; a: number; cr: number }[],
+  ): void {
+    // 기둥은 바람이 셀수록 넓게 퍼진다.
+    const spread = 0.75 + 0.6 * wind;
+    gladeCol.setAttribute("d", gladeColumnPath(t, spread));
+    gladeCore.setAttribute("opacity", (0.35 + 0.12 * Math.sin(t * 1.1)).toFixed(2));
+
+    // 그림자 띠 — 지나가는 먹선 파도가 기둥을 가로지른 자국.
+    gladeBands.forEach((node, i) => {
+      const wave = waves[i];
+      if (!wave || wave.y < 548) {
+        node.setAttribute("opacity", "0");
+        return;
+      }
+      const bu = (wave.y - 545) / 237;
+      const bhw = gladeHalfWidth(wave.y, spread) + 8;
+      node.setAttribute("x", (350 - bhw).toFixed(1));
+      node.setAttribute("y", wave.y.toFixed(1));
+      node.setAttribute("width", (bhw * 2).toFixed(1));
+      node.setAttribute("height", (2 + 9 * bu + 8 * wave.cr).toFixed(1));
+      node.setAttribute("opacity", Math.min(0.7, wave.a * 1.1).toFixed(2));
+    });
+
+    // 물비늘 — 파도가 제 깊이를 지나는 낱알만 밝아진다. 나머지는 잔물결로 숨만 쉰다.
+    const gspread = 0.7 + 0.7 * wind;
+    gladeGlints.forEach((node, i) => {
+      const glint = GLADE_GLINTS[i]!;
+      const reach = (14 + 96 * glint.u ** 1.4) * gspread;
+      const flash = flashAt(glint.y, waves, 8 + 10 * glint.u);
+      const amb = 0.5 + 0.5 * Math.sin(t * glint.v + glint.ph);
+      const w = glint.len * (0.85 + 0.6 * flash);
+      node.setAttribute("x", (350 + glint.gx * reach - w / 2).toFixed(1));
+      node.setAttribute("width", w.toFixed(1));
+      node.setAttribute(
+        "opacity",
+        Math.min(1, glint.envl * (0.05 + 0.13 * amb + 0.9 * flash)).toFixed(3),
+      );
+    });
   }
 
   const press = { x: 350, y: 115, op: 0 };
@@ -326,6 +475,19 @@ function start(svg: SVGSVGElement): void {
       return;
     }
 
+    // 점을 누르면 그 글로 바로 간다. 빈 자리를 눌렀을 때만 목록이 올라온다.
+    const reach = e.pointerType === "touch" ? HIT_R_TOUCH : HIT_R;
+    const hit = posts
+      .map((post) => {
+        const at = pulled(post, press.x, press.y, press.op);
+        return { post, d: Math.hypot(point.x - at.x, point.y - at.y) };
+      })
+      .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug))[0];
+    if (hit && hit.d <= reach) {
+      location.href = `/blog/${hit.post.slug}/`;
+      return;
+    }
+
     openPanel(point.x, point.y);
     if (panelState.open) {
       // 이미 올라와 있으면 그 지점 기준으로 내용만 갈아끼운다.
@@ -443,10 +605,14 @@ function start(svg: SVGSVGElement): void {
     beam.setAttribute("opacity", beamOpacity.toFixed(3));
     for (const stop of beamStops) stop.setAttribute("stop-color", color);
 
+    // 눌리는 점이 커서 밑에 있으면 손 모양으로 알려준다 — 판정은 onDown과 같은 자리에서 잰다.
+    let onPost = false;
     for (const post of posts) {
-      const dx = press.x - post.x;
-      const dy = press.y - post.y;
-      const dist = Math.max(1, Math.hypot(dx, dy));
+      const at = pulled(post, press.x, press.y, press.op);
+      const dist = at.dist;
+      if (target.over && Math.hypot(target.x - at.x, target.y - at.y) <= HIT_R) {
+        onPost = true;
+      }
       let glow = Math.exp(-((dist / 90) ** 2)) * press.op;
       if (beamOn) {
         // 빔 범위 안에 든 글도 함께 점등.
@@ -460,9 +626,8 @@ function start(svg: SVGSVGElement): void {
           );
         }
       }
-      const pull = Math.exp(-((dist / 75) ** 2)) * 10 * press.op;
-      post.dot.setAttribute("cx", (post.x + (dx / dist) * pull).toFixed(1));
-      post.dot.setAttribute("cy", (post.y + (dy / dist) * pull).toFixed(1));
+      post.dot.setAttribute("cx", at.x.toFixed(1));
+      post.dot.setAttribute("cy", at.y.toFixed(1));
       post.dot.setAttribute("r", (1.6 + 3.4 * glow).toFixed(2));
       post.dot.setAttribute("opacity", Math.min(1, glow * 1.15).toFixed(2));
       post.label.setAttribute(
@@ -470,15 +635,29 @@ function start(svg: SVGSVGElement): void {
         Math.max(0, (glow - 0.4) * 1.9).toFixed(2),
       );
     }
+    svg.classList.toggle("on-post", onPost);
 
     for (const stop of haloStops) stop.setAttribute("stop-color", color);
     for (const stop of bloomStops) stop.setAttribute("stop-color", color);
-    for (const bar of reflections) bar.setAttribute("fill", color);
+    // 수면에 비친 빛도 그 빛이다 — 달길과 물비늘이 광원 색을 따라간다.
+    for (const stop of gladeStops) stop.setAttribute("stop-color", color);
+    gladeGlintsG.setAttribute("fill", color);
+    // 빛구멍 속과 수면에 닿은 중심 알 — 밝아서 색이 씻긴 만큼만 배어난다.
+    for (const node of washed) {
+      const pale = angleColorWashed(angle, Number(node.dataset.wash));
+      node.setAttribute(
+        node.tagName === "stop" ? "stop-color" : "fill",
+        pale,
+      );
+    }
 
     const now = performance.now() / 1000;
     const dt = lastT ? Math.min(0.05, now - lastT) : 0.016;
     lastT = now;
     phase += dt * 0.9;
+
+    // 모션을 줄인 화면에서는 layout()이 그린 정지화 한 장을 그대로 둔다.
+    if (!reduceMotion) renderSea(now);
 
     const ps = panelState;
     if (ps.open) {

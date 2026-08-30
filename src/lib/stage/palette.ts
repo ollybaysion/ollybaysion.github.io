@@ -72,8 +72,8 @@ const STOPS: Stop[] = Object.entries(categories)
  * 각도에 놓인 색. 이웃한 두 호 중심 사이를 각도 비율로 섞는다.
  * 카테고리가 하나뿐이면 어디서나 그 색이다.
  */
-export function angleColor(angle: number): string {
-  if (STOPS.length === 1) return toRgbString(STOPS[0]!.color);
+export function angleRgb(angle: number): Rgb {
+  if (STOPS.length === 1) return STOPS[0]!.color;
 
   const a = norm360(angle);
   for (let i = 0; i < STOPS.length; i += 1) {
@@ -81,11 +81,28 @@ export function angleColor(angle: number): string {
     const hi = STOPS[(i + 1) % STOPS.length]!;
     const span = norm360(hi.angle - lo.angle) || 360;
     const offset = norm360(a - lo.angle);
-    if (offset <= span)
-      return toRgbString(mixRgb(lo.color, hi.color, offset / span));
+    if (offset <= span) return mixRgb(lo.color, hi.color, offset / span);
   }
   // 위 순회는 반드시 한 구간에 걸린다. 부동소수 끝자락 대비 폴백.
-  return toRgbString(STOPS[0]!.color);
+  return STOPS[0]!.color;
+}
+
+export function angleColor(angle: number): string {
+  return toRgbString(angleRgb(angle));
+}
+
+const WHITE: Rgb = { r: 255, g: 255, b: 255 };
+
+/**
+ * 각도의 색을 흰빛 쪽으로 바래게 한 것 — `t`가 1이면 흰색.
+ *
+ * 광원 **안쪽**은 밝아서 색이 씻긴다. 한가운데일수록 희고 가장자리로 갈수록 색이
+ * 배어나는데, 정본의 빛구멍이 정확히 그렇게 칠해져 있다: 중심 `#fffdf4`와 가장자리
+ * `#eeddb8`이 커피 호박(#d9a154)을 각각 0.95 · 0.59만큼 흰빛에 섞은 값이다.
+ * 그 비율을 그대로 쓰면 쉬는 색은 정본 그대로면서 광원 색을 따라간다.
+ */
+export function angleColorWashed(angle: number, t: number): string {
+  return toRgbString(mixRgb(angleRgb(angle), WHITE, t));
 }
 
 /** 각도가 호 안이면 0, 밖이면 가까운 쪽 끝까지의 각거리. */

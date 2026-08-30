@@ -15,12 +15,11 @@ import { PROFILE } from '../config/profile.ts';
 import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
 import { meanAngle } from '../lib/coords/arc.ts';
-import { CENTER, RADIUS_MAX } from '../lib/coords/constants.ts';
 import { labelPlacement } from '../lib/stage/label.ts';
 import { EDGE_L as EDGE } from '../lib/stage/list.ts';
 import { angleColor } from '../lib/stage/palette.ts';
-import { SEA_BANDS } from '../lib/stage/sea.ts';
-import { textWidth } from '../lib/stage/text.ts';
+import { GLADE_BAND_COUNT, GLADE_GLINTS, HORIZON_Y } from '../lib/stage/sea.ts';
+import { textWidth, wrapText } from '../lib/stage/text.ts';
 
 const posts = postsData.posts.map((post) => ({
 	...post,
@@ -53,43 +52,166 @@ const constellations = Object.entries(seriesData.series).flatMap(([name, members
 	];
 });
 
-/** ALUMNI 줄 간격(시안: 32 · 58 · 84). */
-const ALUMNI_STRIDE = 26;
-/** 연도 열 다음, 약력이 시작하는 자리. */
-const ALUMNI_WHAT_X = 76;
+/** 정본 좌표계 폭. 필름 프레임선 자리가 이 단위로 적힌다. */
+const VIEW_W = 700;
+/** 필름 프레임 세로선 — 정본 폭의 118 · 606 자리(아래 <line data-at>와 같은 값). */
+const BAND_L = 118;
+const BAND_R = 606;
 
 /**
- * ALUMNI를 접는 기준 폭 — 시안의 950단위를 **실제 글자 길이에서 다시 계산한다.**
+ * 좌측 열의 글줄이 그 폭을 쓰려면 화면(정본 폭)이 얼마나 넓어야 하는가.
  *
- * 950은 시안의 짧은 자리표시자를 재고 나온 값이라, 진짜 약력이 들어가자 좁은
- * 화면에서 명함이 장면 안으로 밀고 들어왔다. 그래서 기준을 글자에 매단다 —
- * `profile.json`의 줄이 길어지면 기준선도 따라 올라가고, 짧아지면 내려간다.
- *
- * 조건: 가장 긴 줄의 오른쪽 끝 + 여백 ≤ 장면 왼쪽 끝.
- *   (350 − w/2) + EDGE + 열너비 + GAP ≤ STAGE_LEFT
+ * 좌측 프레임선은 정본 폭의 118/700 자리에 있고 글은 EDGE에서 시작하니,
+ * 선 안에 들어올 조건은 `EDGE + 폭 + 여백 ≤ 정본폭 × 118/700`이다. 이걸 폭에 대해 푼 것.
  */
-const ALUMNI_GAP = 16;
-/** 장면이 시작하는 자리 — 가장 바깥 나이테의 글 점이 여기까지 온다(350 − RADIUS_MAX). */
-const STAGE_LEFT = CENTER.x - RADIUS_MAX;
-const ALUMNI_COL_W = Math.max(
-	// ALUMNI 라벨은 letter-spacing 3이라 글자 수만큼 더 벌어진다.
-	textWidth('ALUMNI', 11) + 'ALUMNI'.length * 3,
-	...PROFILE.alumni.map((entry) => ALUMNI_WHAT_X + textWidth(entry.what, 11.5)),
+function needW(width: number, margin: number): number {
+	return Math.ceil((VIEW_W * (EDGE + width + margin)) / BAND_L);
+}
+
+/**
+ * 이름 아래 제사(題詞).
+ *
+ * 낱말도 뜻풀이도 **한 크기 한 색**으로 선다 — 크기나 색이 갈리면 한 문장이 아니라
+ * 제목과 부제로 읽힌다. 색은 이름·명함과 같은 회색이라 좌측 열 전체가 한 덩어리다.
+ *
+ * 12는 줄 폭이 위의 이름(32짜리 `DS Kim`, 폭 121)과 같아지는 크기다. 이름 밑에 붙는
+ * 글이니 이름보다 길면 블록이 어긋나 보이고, 이름이 들어가는 화면이면 제사도 들어간다.
+ * 그보다 좁아지면 뜻풀이가 물러나고 낱말만 남는다 — 명함이 물러나는 것과 같은 문법이다.
+ */
+const TAGLINE_Y = 31;
+const TAGLINE_SIZE = 12;
+const TAGLINE_SPACING = 2;
+const TAGLINE_GAP = 9;
+const TAGLINE_LEAD_W =
+	textWidth(PROFILE.tagline.lead, TAGLINE_SIZE) +
+	[...PROFILE.tagline.lead].length * TAGLINE_SPACING;
+const TAGLINE_W =
+	TAGLINE_LEAD_W + TAGLINE_GAP + textWidth(PROFILE.tagline.gloss, TAGLINE_SIZE);
+const TAGLINE_GLOSS_MIN_W = needW(TAGLINE_W, 2);
+
+/**
+ * 낱말을 풀어 쓴 글 — 손을 올렸을 때만 제사 아래에 나타난다.
+ *
+ * 나타나는 방식은 별자리 설명(`.series-caption`)과 같은 문법이다. 늘 떠 있으면 이름
+ * 아래가 문단이 되어 명함이 아니라 서문이 된다.
+ *
+ * 110에서 접는 건 4:3 화면(정본 폭 1053)의 좌측 프레임선 안쪽 자리가 125라서다.
+ * 세 줄이 아이콘 자리(local 64)를 지나 내려가니, 글이 떠 있는 동안 아이콘이 물러난다.
+ */
+const NOTE_Y = TAGLINE_Y + 17;
+const NOTE_SIZE = 10;
+const NOTE_LINE_H = 12;
+const NOTE_LINES = wrapText(PROFILE.tagline.note, NOTE_SIZE, 110, 4);
+const NOTE_SOURCE_SIZE = 8.5;
+const NOTE_SOURCE_Y = NOTE_Y + NOTE_LINES.length * NOTE_LINE_H + 2;
+const NOTE_MIN_W = needW(
+	Math.max(
+		...NOTE_LINES.map((line) => textWidth(line, NOTE_SIZE)),
+		textWidth(PROFILE.tagline.source, NOTE_SOURCE_SIZE),
+	),
+	2,
 );
-const ALUMNI_MIN_W = Math.ceil(
-	2 * (CENTER.x + EDGE + ALUMNI_COL_W + ALUMNI_GAP - STAGE_LEFT),
+/**
+ * 손이 닿는 자리 — 글자만이 아니라 제사 줄 전체가 받는다.
+ *
+ * 제사 줄까지만 덮는다. 풀이가 뜨는 자리까지 늘리면 그 밑의 아이콘 링크를 가린다.
+ */
+const EPIGRAPH_SHIELD = { y: TAGLINE_Y - 14, h: 23 };
+
+/**
+ * 좌측 명함의 이력 무리 — ALUMNI · CERTIFICATES.
+ *
+ * 크기는 시안(11.5/10.5)보다 한 단계 작다. 시안 값은 짧은 자리표시자를 재고 나온 거라
+ * 진짜 약력이 들어가자 열이 너무 길어져 왼쪽 프레임선을 넘어 장면 쪽으로 뻗었다.
+ */
+const CARD_SIZE = 10;
+const CARD_YEAR_SIZE = 8.5;
+/** 무리 이름은 항목보다 크다 — 머리글이니까. 자간은 정본과 같은 3. */
+const CARD_LABEL_SIZE = 11.5;
+const CARD_LABEL_SPACING = 3;
+/** 연도는 모노 폰트라 en dash까지 전부 이 정폭이다(textWidth의 글자별 배율이 안 맞는다). */
+const CARD_MONO_RATIO = 0.6;
+/** 연도 홈 — 연도 열과 글줄 사이. */
+const CARD_GUTTER = 10;
+/** 한 항목 안에서의 줄 간격 · 항목끼리 · 무리끼리 · 라벨과 첫 줄 사이. */
+const CARD_LINE_H = 12;
+const CARD_ENTRY_GAP = 20;
+const CARD_SECTION_GAP = 34;
+const CARD_LABEL_GAP = 30;
+
+const CARD_SECTIONS = [
+	{ label: 'ALUMNI', entries: PROFILE.alumni },
+	{ label: 'CERTIFICATES', entries: PROFILE.certificates },
+].filter((section) => section.entries.length > 0);
+
+/**
+ * 연도 열의 폭 — 그 무리에서 가장 긴 연도가 정한다.
+ *
+ * 연도는 이 열 안에서 **왼쪽 맞춤**이다. 오른쪽 맞춤을 해봤더니 `2024–`처럼 끝이
+ * 열린 기간에서 en dash가 열 끝에 걸려 홈이 붙어 보였고, 시작 연도가 어긋나 위아래로
+ * 읽히지 않았다. 왼쪽에 붙이면 시작 연도가 한 줄로 서고, 오른쪽은 en dash가 알아서 만다.
+ */
+function yearWidth(entries: readonly { years: string }[]): number {
+	return Math.ceil(
+		Math.max(...entries.map((entry) => [...entry.years].length)) *
+			CARD_MONO_RATIO *
+			CARD_YEAR_SIZE,
+	);
+}
+
+/**
+ * 글줄이 쓸 수 있는 폭. 넘으면 연도 옆에서 두 줄로 접는다.
+ *
+ * 한 줄로는 긴 약력이 애초에 안 된다 — 좌측 프레임선 안쪽에 남는 자리는 16:9에서
+ * 187단위가 천장이고(선이 폭의 118/700인데 그 폭이 화면비에 묶여 있다), 연도 열을 빼면
+ * 몫이 130 남짓이다. "SKKU Semiconductor System Engineering"은 200단위라
+ * 5.4px까지 줄여야 들어간다. 그래서 크기가 아니라 줄로 푼다.
+ *
+ * 연도가 짧은 무리(CERTIFICATES: "2026")는 홈이 좁아 그만큼 글줄이 길어진다 —
+ * "SCA Brewing Professional"이 한 줄로 서는 건 그 덕이다.
+ */
+const CARD_WRAP_LIMIT = 158;
+
+/** 무리별로 접고 자리를 잡는다. 줄 수가 항목마다 다르다. */
+let cardY = 0;
+const CARD_BLOCKS = CARD_SECTIONS.map((section, index) => {
+	const labelY = index === 0 ? 0 : cardY + CARD_SECTION_GAP;
+	const whatX = yearWidth(section.entries) + CARD_GUTTER;
+	let rowY = labelY + CARD_LABEL_GAP;
+	const rows = section.entries.map((entry, i) => {
+		if (i > 0) rowY += CARD_ENTRY_GAP;
+		const lines = wrapText(entry.what, CARD_SIZE, CARD_WRAP_LIMIT - whatX, 2);
+		const row = { years: entry.years, lines, y: rowY };
+		rowY += (lines.length - 1) * CARD_LINE_H;
+		return row;
+	});
+	cardY = rowY;
+	return { label: section.label, labelY, whatX, rows };
+});
+const CARD_BOTTOM = cardY;
+
+const CARD_COL_W = Math.max(
+	// 라벨은 letter-spacing이 붙어 글자 수만큼 더 벌어진다.
+	...CARD_BLOCKS.map(
+		(block) => textWidth(block.label, CARD_LABEL_SIZE) + block.label.length * CARD_LABEL_SPACING,
+	),
+	...CARD_BLOCKS.flatMap((block) =>
+		block.rows.flatMap((row) => row.lines.map((line) => block.whatX + textWidth(line, CARD_SIZE))),
+	),
 );
 
+/**
+ * 명함을 접는 기준 폭 — **좌측 프레임선 안에 들어올 때만 편다.**
+ *
+ * 전에는 기준이 장면 왼쪽 끝(350 − RADIUS_MAX)이었다. 겹치지는 않았지만 명함이
+ * 프레임선을 넘어 가운데로 뻗어 보였다. 선을 기준으로 바꾸면 두 가지가 한 규칙이 된다 —
+ * 선은 장면보다 항상 왼쪽이라, 선 안에 들어오면 장면은 자동으로 안전하다.
+ *
+ * 조건: EDGE + 열너비 + 여백 ≤ 폭 × (BAND_L / 700)
+ */
+const CARD_MIN_W = needW(CARD_COL_W, 2);
+
 const PANEL_ROWS = [592, 624, 656, 688, 720];
-const REFLECTIONS = [
-	{ x: 305, y: 625, w: 90, o: 0.75 },
-	{ x: 322, y: 642, w: 56, o: 0.6 },
-	{ x: 295, y: 662, w: 110, o: 0.5 },
-	{ x: 320, y: 684, w: 60, o: 0.42 },
-	{ x: 308, y: 710, w: 84, o: 0.34 },
-	{ x: 328, y: 737, w: 44, o: 0.26 },
-	{ x: 318, y: 767, w: 64, o: 0.18 },
-];
 ---
 
 <div class="stage">
@@ -100,10 +222,14 @@ const REFLECTIONS = [
 		data-d-max={postsData.dMax}
 	>
 		<defs>
+			{/*
+			  빛구멍 속. data-wash = 광원 색을 흰빛에 섞는 비율(main-stage.ts가 매 프레임 칠한다).
+			  적혀 있는 색은 쉬는 색 — 커피 호박을 각각 그만큼 바래게 한 값과 같다.
+			*/}
 			<radialGradient id="hap-light">
-				<stop offset="0%" stop-color="#fffdf4"></stop>
-				<stop offset="70%" stop-color="#fffdf4"></stop>
-				<stop offset="100%" stop-color="#eeddb8"></stop>
+				<stop offset="0%" stop-color="#fffdf4" data-wash="0.95"></stop>
+				<stop offset="70%" stop-color="#fffdf4" data-wash="0.95"></stop>
+				<stop offset="100%" stop-color="#eeddb8" data-wash="0.59"></stop>
 			</radialGradient>
 			<radialGradient id="hap-bloom">
 				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.45"></stop>
@@ -159,7 +285,12 @@ const REFLECTIONS = [
 			<filter id="beamblur" x="-40%" y="-40%" width="180%" height="180%">
 				<feGaussianBlur stdDeviation="5"></feGaussianBlur>
 			</filter>
-			<clipPath id="seaclip"><rect id="seaclip-rect" x="0" y="590" width="700" height="200"></rect></clipPath>
+			{/* 달길 기둥 — 수평선 쪽이 밝고 관찰자 쪽으로 잦아든다. */}
+			<linearGradient id="gladecol" x1="0" y1="0" x2="0" y2="1">
+				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.5"></stop>
+				<stop offset="55%" stop-color="#d9a154" stop-opacity="0.16"></stop>
+				<stop offset="100%" stop-color="#d9a154" stop-opacity="0.03"></stop>
+			</linearGradient>
 		</defs>
 
 		<circle cx="350" cy="235" r="210" fill="url(#clothfield)"></circle>
@@ -192,29 +323,59 @@ const REFLECTIONS = [
 			))
 		}
 
-		<line class="bleed" y1="590" y2="590" stroke="#2a2a2e" stroke-width="1.5" opacity="0.55"></line>
-		<g clip-path="url(#seaclip)" opacity="0.3">
-			<g id="sea" transform="translate(0,457) scale(0.7)">
-				{SEA_BANDS.map((band) => <path d={band.d} fill={band.fill} />)}
-			</g>
-			{/* 세로로 긴 화면에서 바다가 끊기지 않게, 마지막 밴드 색으로 바닥까지 잇는다. */}
-			<rect id="sea-floor" y="960" fill="#e4e4e4"></rect>
-		</g>
+		<line
+			class="bleed"
+			y1={HORIZON_Y}
+			y2={HORIZON_Y}
+			stroke="#2a2a2e"
+			stroke-width="1.5"
+			opacity="0.55"></line>
+		{/*
+		  바다 — 수평선 아래 전폭 캔버스. 먹선 파도가 여기서 태어나 물가로 내려온다.
+		  자리와 픽셀 크기는 layout()이 화면에 맞춘다.
+		*/}
+		<foreignObject id="sea-fo" x="0" y={HORIZON_Y} width="700" height="272">
+			<canvas id="seacv" style="display:block;width:100%;height:100%"></canvas>
+		</foreignObject>
 
-		{
-			REFLECTIONS.map((bar) => (
-				<rect
-					class="refl"
-					x={bar.x}
-					y={bar.y}
-					width={bar.w}
-					height="3"
-					rx="1.5"
-					fill="#d9a154"
-					opacity={bar.o}
-				/>
-			))
-		}
+		{/*
+		  윤슬 — 달길 빛기둥 위의 물비늘. 그림자 띠와 낱알 점등은 능선 위상이 아니라
+		  파도가 그 깊이를 실제로 지나갈 때 켜진다(main-stage.ts).
+		*/}
+		<g id="glade">
+			<path id="glade-col" d="" fill="url(#gladecol)" filter="url(#soften)"></path>
+			{/* 빛구멍 한가운데가 수면에 닿은 자리 — 그 색을 그대로 받는다(data-wash). */}
+			<ellipse
+				id="glade-core"
+				cx="350"
+				cy="552"
+				rx="24"
+				ry="4.5"
+				fill="#fffdf4"
+				data-wash="0.95"
+				opacity="0.45"
+				filter="url(#soften)"></ellipse>
+			<g id="glade-bands">
+				{
+					Array.from({ length: GLADE_BAND_COUNT }, () => (
+						<rect fill="#131316" opacity="0" />
+					))
+				}
+			</g>
+			{/* 낱알 색은 무리에서 물려받는다 — 광원 색이 바뀌면 한 자리만 고치면 되게. */}
+			<g id="glade-glints" fill="#d9a154">
+				{
+					GLADE_GLINTS.map((glint) => (
+						<rect
+							y={glint.y.toFixed(1)}
+							height={glint.h.toFixed(1)}
+							rx={(glint.h / 2).toFixed(1)}
+							opacity="0"
+						/>
+					))
+				}
+			</g>
+		</g>
 
 		{
 			constellations.map((series) => (
@@ -325,7 +486,42 @@ const REFLECTIONS = [
 			<text class="mono" x="0" y="0" font-size="32" letter-spacing="1" fill="#8f8c85"
 				>{PROFILE.name}</text
 			>
-			<text x="0" y="28" font-size="11" fill="#8f8c85" opacity="0.75">{PROFILE.tagline}</text>
+			{/*
+			  제사 — 한 줄, 한 크기, 이름과 같은 회색. 좁은 화면에서는 어원이 물러나고(data-min-w),
+			  손을 올리면 뜻이 아래에 나타난다.
+			*/}
+			<g class="epigraph">
+				<rect
+					class="card-shield"
+					x={-8}
+					y={EPIGRAPH_SHIELD.y}
+					width={TAGLINE_W + 16}
+					height={EPIGRAPH_SHIELD.h}
+				/>
+				<text x="0" y={TAGLINE_Y} font-size={TAGLINE_SIZE} fill="#8f8c85">
+					<tspan letter-spacing={TAGLINE_SPACING}>{PROFILE.tagline.lead}</tspan>
+					<tspan id="tagline-gloss" data-min-w={TAGLINE_GLOSS_MIN_W} dx={TAGLINE_GAP}
+						>{PROFILE.tagline.gloss}</tspan
+					>
+				</text>
+				<g class="epigraph-note" data-min-w={NOTE_MIN_W}>
+					<text x="0" y={NOTE_Y} font-size={NOTE_SIZE} fill="#8f8c85">
+						{NOTE_LINES.map((line, i) => (
+							<tspan x="0" y={NOTE_Y + i * NOTE_LINE_H}>
+								{line}
+							</tspan>
+						))}
+					</text>
+					<text
+						x="0"
+						y={NOTE_SOURCE_Y}
+						font-size={NOTE_SOURCE_SIZE}
+						fill="#8f8c85"
+						opacity="0.6">
+						{PROFILE.tagline.source}
+					</text>
+				</g>
+			</g>
 		</g>
 
 		<g id="social">
@@ -353,8 +549,8 @@ const REFLECTIONS = [
 		</g>
 
 		{
-			PROFILE.alumni.length > 0 && (
-				<g id="alumni-col" data-min-w={ALUMNI_MIN_W}>
+			CARD_BLOCKS.length > 0 && (
+				<g id="alumni-col" data-min-w={CARD_MIN_W}>
 					{/*
 					  명함은 읽는 것이지 누르는 것이 아니다 — 이 판이 클릭을 받아
 					  뒤의 무대로 넘기지 않는다(파도 목록이 올라오지 않게).
@@ -363,19 +559,34 @@ const REFLECTIONS = [
 						class="card-shield"
 						x={-8}
 						y={-20}
-						width={ALUMNI_COL_W + 16}
-						height={PROFILE.alumni.length * ALUMNI_STRIDE + 32}
+						width={CARD_COL_W + 16}
+						height={CARD_BOTTOM + 32}
 					/>
-					<text x="0" y="0" font-size="11" letter-spacing="3" fill="#8f8c85" opacity="0.8">
-						ALUMNI
-					</text>
-					{PROFILE.alumni.map((entry, i) => (
-						<text class="al-line" x="0" y={32 + i * ALUMNI_STRIDE} font-size="11.5">
-							<tspan class="mono" font-size="10.5" opacity="0.7">
-								{entry.years}
-							</tspan>
-							<tspan x={ALUMNI_WHAT_X}>{entry.what}</tspan>
-						</text>
+					{CARD_BLOCKS.map((block) => (
+						<>
+							<text
+								x="0"
+								y={block.labelY}
+								font-size={CARD_LABEL_SIZE}
+								letter-spacing={CARD_LABEL_SPACING}
+								fill="#8f8c85"
+								opacity="0.8"
+							>
+								{block.label}
+							</text>
+							{block.rows.map((row) => (
+								<text class="al-line" x="0" y={row.y} font-size={CARD_SIZE}>
+									<tspan class="mono" x="0" font-size={CARD_YEAR_SIZE} opacity="0.7">
+										{row.years}
+									</tspan>
+									{row.lines.map((line, i) => (
+										<tspan x={block.whatX} y={row.y + i * CARD_LINE_H}>
+											{line}
+										</tspan>
+									))}
+								</text>
+							))}
+						</>
 					))}
 				</g>
 			)
@@ -401,14 +612,14 @@ const REFLECTIONS = [
 		<rect class="cover" filter="url(#grainw)" opacity="0.05" pointer-events="none"></rect>
 		<line
 			class="band"
-			data-at="118"
+			data-at={BAND_L}
 			stroke="#ffffff"
 			stroke-width="0.6"
 			opacity="0.04"
 			pointer-events="none"></line>
 		<line
 			class="band"
-			data-at="606"
+			data-at={BAND_R}
 			stroke="#ffffff"
 			stroke-width="0.9"
 			opacity="0.056"
@@ -475,9 +686,53 @@ const REFLECTIONS = [
 		pointer-events: none;
 	}
 
-	/* 좌측 열 — 명함. ALUMNI는 옆자리가 없는 좁은 무대에서 물러난다. */
+	/* 바다·윤슬은 배경이다 — 커서를 가로채면 그 위에서 목록이 안 열린다. */
+	#sea-fo,
+	#glade {
+		pointer-events: none;
+	}
+
+	/* 점이 커서 밑에 오면 누를 수 있다는 뜻이다(main-stage.ts가 붙인다). */
+	#hoverscene.on-post {
+		cursor: pointer;
+	}
+
+	/* 좌측 열 — 명함. 제사의 뜻풀이와 ALUMNI는 옆자리가 없는 좁은 무대에서 물러난다. */
 	#sitename {
 		opacity: 0.85;
+	}
+
+	#tagline-gloss {
+		transition: opacity 0.35s ease;
+	}
+
+	#tagline-gloss.is-hidden {
+		opacity: 0;
+	}
+
+	/* 풀이는 손을 올렸을 때만 — 별자리 설명과 같은 문법이다. */
+	.epigraph-note {
+		opacity: 0;
+		/* 뜬 글자가 손을 다시 받으면 깜빡인다 — 판정은 제사 줄의 방패만 한다. */
+		pointer-events: none;
+		transition: opacity 0.18s ease;
+	}
+
+	.epigraph:hover .epigraph-note:not(.is-hidden) {
+		opacity: 1;
+	}
+
+	/*
+	  풀이가 세 줄이라 아이콘 자리를 지나 내려온다 — 그동안 아이콘이 물러난다.
+	  희미하게 남기면 유령이 글자 위에 겹치니 아예 지운다.
+	*/
+	#social {
+		transition: opacity 0.18s ease;
+	}
+
+	#sitename:has(.epigraph:hover) ~ #social {
+		opacity: 0;
+		pointer-events: none;
 	}
 
 	#alumni-col {
