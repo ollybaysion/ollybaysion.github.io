@@ -6,27 +6,23 @@
  * 보여준다면 여기는 "어느 순서로 읽나"만 보여준다 — 그래서 별자리 모양을 재현하지 않고
  * 회차를 관통하는 일직선 하나에 점을 꿴다.
  *
+ * 목록·글 화면과 같이 한 장을 **두 판으로** 찍는다(`src/lib/stage/page.ts`) —
+ * 넓은 판은 정본 700 열, 좁은 판은 폰 한 장(390). CSS가 화면 폭을 보고 하나를 고르니
+ * 자바스크립트가 죽어도 폰에서는 좁은 판이 선다.
+ *
  * 자리·크기는 `src/lib/stage/series.ts`가 정하고, 회차 순서는 빌드 때 박힌
  * `series.json`을 그대로 읽는다 — 화면에서 다시 매기지 않는다.
  */
 import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
 import { meanAngle } from '../lib/coords/arc.ts';
-import {
-	BACK_LINK,
-	BAND,
-	EDGE_L,
-	EDGE_R,
-	HOLE,
-	LIST_W,
-	SUBTITLE_Y,
-	circleTitle,
-} from '../lib/stage/list.ts';
+import { SUBTITLE_Y, circleTitle } from '../lib/stage/list.ts';
+import { EDITIONS } from '../lib/stage/page.ts';
 import { angleColor, categoryDeepColor, nearestCategory } from '../lib/stage/palette.ts';
 import {
-	NODE_METRICS,
 	NODE_STRIDE,
 	seriesLayout,
+	seriesMetrics,
 	seriesSubtitle,
 } from '../lib/stage/series.ts';
 import { truncateText } from '../lib/stage/text.ts';
@@ -58,8 +54,6 @@ const episodes = members.flatMap((member) => {
 	];
 });
 
-const layout = seriesLayout(episodes.length);
-
 /**
  * 시리즈의 색 — 멤버 각도의 원형 평균에서 나온다. 메인의 별자리, 글 화면의 스트립과
  * 같은 규칙이라 세 화면에서 같은 시리즈가 같은 색으로 보인다.
@@ -70,238 +64,300 @@ const deep = categoryDeepColor(nearestCategory(mean));
 
 const title = circleTitle(series);
 
-/** 제목이 잘리는 폭 — 오른쪽 끝의 읽는 시간 자리를 비워둔다. */
-const TITLE_W = EDGE_R - NODE_METRICS.textX - 52;
+/** 제목 오른쪽에 비워두는 자리 — 읽는 시간("12분")이 앉는다. 좁은 판은 그만큼 덜 비운다. */
+const MINUTES_ROOM = { wide: 52, narrow: 44 };
 const n = (value: number) => Number(value.toFixed(3));
+
+/** 판마다 한 장. 세로 리듬은 같고 가로 자리와 잘리는 폭만 판을 따라 다시 든다. */
+const sheets = EDITIONS.map((edition) => {
+	const node = seriesMetrics(edition);
+	return {
+		edition,
+		node,
+		layout: seriesLayout(episodes.length, edition),
+		titleW: edition.edgeR - node.textX - MINUTES_ROOM[edition.name],
+	};
+});
 ---
 
 <div class="series" style={`--series-accent: ${accent};`}>
-	<svg
-		id="seriesscene"
-		viewBox={`0 0 ${LIST_W} ${layout.height}`}
-		data-height={layout.height}
-		data-series={series}
-	>
-		<defs>
-			<radialGradient id="lapS-light">
-				<stop offset="0%" stop-color="#fffdf4"></stop>
-				<stop offset="70%" stop-color="#fffdf4"></stop>
-				<stop offset="100%" stop-color="#eeddb8"></stop>
-			</radialGradient>
-			<radialGradient id="lapS-bloom">
-				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.45"></stop>
-				<stop offset="45%" stop-color="#d9a154" stop-opacity="0.158"></stop>
-				<stop offset="100%" stop-color="#d9a154" stop-opacity="0"></stop>
-			</radialGradient>
-			<radialGradient id="clothfieldS">
-				<stop offset="0%" stop-color="#cfc9bd" stop-opacity="0"></stop>
-				<stop offset="36%" stop-color="#cfc9bd" stop-opacity="0"></stop>
-				<stop offset="46%" stop-color="#cfc9bd" stop-opacity="0.13"></stop>
-				<stop offset="62%" stop-color="#cfc9bd" stop-opacity="0.08"></stop>
-				<stop offset="100%" stop-color="#cfc9bd" stop-opacity="0"></stop>
-			</radialGradient>
-			<radialGradient id="svig" cx="0.5" cy="0.42" r="0.8">
-				<stop offset="0%" stop-color="#000000" stop-opacity="0"></stop>
-				<stop offset="68%" stop-color="#000000" stop-opacity="0"></stop>
-				<stop offset="100%" stop-color="#000000" stop-opacity="0.34"></stop>
-			</radialGradient>
-			<filter id="grainw">
-				<feTurbulence
-					type="fractalNoise"
-					baseFrequency="0.8"
-					numOctaves="2"
-					seed="7"
-					stitchTiles="stitch"></feTurbulence>
-				<feColorMatrix
-					type="matrix"
-					values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.6 0.6 0.6 0 0"></feColorMatrix>
-			</filter>
-			<filter id="punch" x="-15%" y="-15%" width="130%" height="130%">
-				<feTurbulence
-					type="fractalNoise"
-					baseFrequency="0.045"
-					numOctaves="3"
-					seed="4"
-					result="pn"></feTurbulence>
-				<feDisplacementMap in="SourceGraphic" in2="pn" scale="6"></feDisplacementMap>
-			</filter>
-			<filter id="soften" x="-20%" y="-20%" width="140%" height="140%">
-				<feGaussianBlur stdDeviation="3"></feGaussianBlur>
-			</filter>
-		</defs>
-
-		{/* 화면 위쪽에 반쯤 박힌 빛구멍 — 모든 화면에 나오는 그 원이다. */}
-		<circle cx={HOLE.cx} cy={HOLE.cy} r="150" fill="url(#clothfieldS)"></circle>
-		<circle cx={HOLE.cx} cy={HOLE.cy} r="200" fill="url(#lapS-bloom)"></circle>
-		<circle cx={HOLE.cx} cy={HOLE.cy} r={HOLE.r} fill="url(#lapS-light)" filter="url(#punch)"
-		></circle>
-		<circle cx={HOLE.cx} cy={HOLE.cy} r="48" fill="#ffffff" opacity="0.55" filter="url(#soften)"
-		></circle>
-
-		<a href="/" class="back">
-			<text x={BACK_LINK.x} y={BACK_LINK.y} font-size="11.5" fill="#8f8c85" opacity="0.85"
-				>← 메인</text
+	{
+		sheets.map(({ edition, node, layout, titleW }) => (
+			<svg
+				class={`seriesscene sheet-${edition.name}`}
+				viewBox={`0 0 ${edition.w} ${layout.height}`}
+				data-height={layout.height}
+				data-width={edition.w}
+				data-edition={edition.name}
+				data-series={series}
 			>
-		</a>
+				<defs>
+					<radialGradient id={`${edition.name}-lapS-light`}>
+						<stop offset="0%" stop-color="#fffdf4" />
+						<stop offset="70%" stop-color="#fffdf4" />
+						<stop offset="100%" stop-color="#eeddb8" />
+					</radialGradient>
+					<radialGradient id={`${edition.name}-lapS-bloom`}>
+						<stop offset="0%" stop-color="#d9a154" stop-opacity="0.45" />
+						<stop offset="45%" stop-color="#d9a154" stop-opacity="0.158" />
+						<stop offset="100%" stop-color="#d9a154" stop-opacity="0" />
+					</radialGradient>
+					<radialGradient id={`${edition.name}-clothfieldS`}>
+						<stop offset="0%" stop-color="#cfc9bd" stop-opacity="0" />
+						<stop offset="36%" stop-color="#cfc9bd" stop-opacity="0" />
+						<stop offset="46%" stop-color="#cfc9bd" stop-opacity="0.13" />
+						<stop offset="62%" stop-color="#cfc9bd" stop-opacity="0.08" />
+						<stop offset="100%" stop-color="#cfc9bd" stop-opacity="0" />
+					</radialGradient>
+					<radialGradient id={`${edition.name}-svig`} cx="0.5" cy="0.42" r="0.8">
+						<stop offset="0%" stop-color="#000000" stop-opacity="0" />
+						<stop offset="68%" stop-color="#000000" stop-opacity="0" />
+						<stop offset="100%" stop-color="#000000" stop-opacity="0.34" />
+					</radialGradient>
+					<filter id={`${edition.name}-grainw`}>
+						<feTurbulence
+							type="fractalNoise"
+							baseFrequency="0.8"
+							numOctaves="2"
+							seed="7"
+							stitchTiles="stitch"
+						/>
+						<feColorMatrix
+							type="matrix"
+							values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.6 0.6 0.6 0 0"
+						/>
+					</filter>
+					<filter id={`${edition.name}-punch`} x="-15%" y="-15%" width="130%" height="130%">
+						<feTurbulence
+							type="fractalNoise"
+							baseFrequency="0.045"
+							numOctaves="3"
+							seed="4"
+							result="pn"
+						/>
+						<feDisplacementMap in="SourceGraphic" in2="pn" scale="6" />
+					</filter>
+					<filter id={`${edition.name}-soften`} x="-20%" y="-20%" width="140%" height="140%">
+						<feGaussianBlur stdDeviation="3" />
+					</filter>
+				</defs>
 
-		<text class="name" x={HOLE.cx} text-anchor="middle" font-size={title.size} fill={deep}>
-			{title.lines.map((line, i) => <tspan x={HOLE.cx} y={n(title.baselines[i]!)}>{line}</tspan>)}
-		</text>
+				{/* 화면 위쪽에 반쯤 박힌 빛구멍 — 모든 화면에 나오는 그 원이다. */}
+				<circle
+					cx={edition.hole.cx}
+					cy={edition.hole.cy}
+					r={edition.halo.field}
+					fill={`url(#${edition.name}-clothfieldS)`}
+				/>
+				<circle
+					cx={edition.hole.cx}
+					cy={edition.hole.cy}
+					r={edition.halo.bloom}
+					fill={`url(#${edition.name}-lapS-bloom)`}
+				/>
+				<circle
+					cx={edition.hole.cx}
+					cy={edition.hole.cy}
+					r={edition.hole.r}
+					fill={`url(#${edition.name}-lapS-light)`}
+					filter={`url(#${edition.name}-punch)`}
+				/>
+				<circle
+					cx={edition.hole.cx}
+					cy={edition.hole.cy}
+					r={edition.halo.core}
+					fill="#ffffff"
+					opacity="0.55"
+					filter={`url(#${edition.name}-soften)`}
+				/>
 
-		<text
-			class="mono"
-			x={HOLE.cx}
-			y={SUBTITLE_Y}
-			text-anchor="middle"
-			font-size="11"
-			fill="#8f8c85">{seriesSubtitle(episodes.length)}</text
-		>
-
-		{
-			layout.line && (
-				<path d={layout.line} stroke={accent} stroke-width="1" fill="none" opacity="0.45" />
-			)
-		}
-
-		{
-			episodes.map((entry, i) => (
-				<a class="ep" href={`/blog/${entry.slug}/`}>
-					<rect
-						class="hit"
-						x={EDGE_L}
-						y={layout.nodes[i]!.dot - 22}
-						width={EDGE_R - EDGE_L}
-						height={NODE_STRIDE - 8}
-					/>
-					<circle
-						cx={NODE_METRICS.x}
-						cy={layout.nodes[i]!.dot}
-						r={NODE_METRICS.r}
-						fill={accent}
-						opacity="0.95"
-					/>
-					<text
-						class="mono ep-no"
-						x={NODE_METRICS.episodeX}
-						y={layout.nodes[i]!.title}
-						text-anchor="end"
-						font-size="12"
-						fill={accent}
-						opacity="0.9"
-					>
-						{entry.episode}
-					</text>
-					<text x={NODE_METRICS.textX} y={layout.nodes[i]!.title} font-size="15" fill="#e8e6e1">
-						{truncateText(entry.title, 15, TITLE_W)}
-					</text>
-					<text
-						class="mono"
-						x={NODE_METRICS.textX}
-						y={layout.nodes[i]!.date}
-						font-size="11"
-						fill="#8f8c85"
-					>
-						{entry.date}
-					</text>
-					<text
-						class="mono"
-						x={EDGE_R}
-						y={layout.nodes[i]!.title}
-						text-anchor="end"
-						font-size="11"
-						fill="#8f8c85"
-					>
-						{`${entry.minutes}분`}
+				<a href="/" class="back">
+					<text x={edition.back.x} y={edition.back.y} font-size="11.5" fill="#8f8c85" opacity="0.85">
+						← 메인
 					</text>
 				</a>
-			))
-		}
 
-		<rect class="bleed-cover" x="0" y="0" width={LIST_W} height={layout.height} fill="url(#svig)"
-		></rect>
-		<rect
-			class="bleed-cover"
-			x="0"
-			y="0"
-			width={LIST_W}
-			height={layout.height}
-			filter="url(#grainw)"
-			opacity="0.05"></rect>
-		<line
-			class="bleed-band"
-			data-at={BAND[0]}
-			x1={BAND[0]}
-			y1="0"
-			x2={BAND[0]}
-			y2={layout.height}
-			stroke="#ffffff"
-			stroke-width="0.6"
-			opacity="0.04"></line>
-		<line
-			class="bleed-band"
-			data-at={BAND[1]}
-			x1={BAND[1]}
-			y1="0"
-			x2={BAND[1]}
-			y2={layout.height}
-			stroke="#ffffff"
-			stroke-width="0.9"
-			opacity="0.056"></line>
-	</svg>
+				<text
+					class="name"
+					x={edition.hole.cx}
+					text-anchor="middle"
+					font-size={title.size}
+					fill={deep}
+				>
+					{title.lines.map((line, i) => (
+						<tspan x={edition.hole.cx} y={n(title.baselines[i]!)}>
+							{line}
+						</tspan>
+					))}
+				</text>
+
+				<text
+					class="mono"
+					x={edition.hole.cx}
+					y={SUBTITLE_Y}
+					text-anchor="middle"
+					font-size="11"
+					fill="#8f8c85"
+				>
+					{seriesSubtitle(episodes.length)}
+				</text>
+
+				{layout.line && (
+					<path d={layout.line} stroke={accent} stroke-width="1" fill="none" opacity="0.45" />
+				)}
+
+				{episodes.map((entry, i) => (
+					<a class="ep" href={`/blog/${entry.slug}/`}>
+						<rect
+							class="hit"
+							x={edition.edgeL}
+							y={layout.nodes[i]!.dot - 22}
+							width={edition.edgeR - edition.edgeL}
+							height={NODE_STRIDE - 8}
+						/>
+						<circle
+							cx={node.x}
+							cy={layout.nodes[i]!.dot}
+							r={node.r}
+							fill={accent}
+							opacity="0.95"
+						/>
+						<text
+							class="mono ep-no"
+							x={node.episodeX}
+							y={layout.nodes[i]!.title}
+							text-anchor="end"
+							font-size="12"
+							fill={accent}
+							opacity="0.9"
+						>
+							{entry.episode}
+						</text>
+						<text x={node.textX} y={layout.nodes[i]!.title} font-size="15" fill="#e8e6e1">
+							{truncateText(entry.title, 15, titleW)}
+						</text>
+						<text class="mono" x={node.textX} y={layout.nodes[i]!.date} font-size="11" fill="#8f8c85">
+							{entry.date}
+						</text>
+						<text
+							class="mono"
+							x={edition.edgeR}
+							y={layout.nodes[i]!.title}
+							text-anchor="end"
+							font-size="11"
+							fill="#8f8c85"
+						>
+							{`${entry.minutes}분`}
+						</text>
+					</a>
+				))}
+
+				<rect
+					class="bleed-cover"
+					x="0"
+					y="0"
+					width={edition.w}
+					height={layout.height}
+					fill={`url(#${edition.name}-svig)`}
+				/>
+				<rect
+					class="bleed-cover"
+					x="0"
+					y="0"
+					width={edition.w}
+					height={layout.height}
+					filter={`url(#${edition.name}-grainw)`}
+					opacity="0.05"
+				/>
+				{edition.band.map((at, i) => (
+					<line
+						class="bleed-band"
+						data-at={at}
+						x1={at}
+						y1="0"
+						x2={at}
+						y2={layout.height}
+						stroke="#ffffff"
+						stroke-width={i === 0 ? 0.6 : 0.9}
+						opacity={i === 0 ? 0.04 : 0.056}
+					/>
+				))}
+			</svg>
+		))
+	}
 </div>
 
 <style>
 	/*
-	  목록과 같은 규칙이다 — 정본의 700 좌표계는 그대로 두고 남는 가로만 무대로 준다.
+	  목록과 같은 규칙이다 — 판(700 · 390)의 좌표계는 그대로 두고 남는 가로만 무대로 준다.
 	  실제 viewBox와 가로 요소의 폭은 series-screen.ts의 layout()이 잡는다.
 	*/
 	.series {
 		width: 100%;
 	}
 
-	#seriesscene {
+	.seriesscene {
 		display: block;
 		width: 100%;
 		height: auto;
 	}
 
-	#seriesscene text {
+	/*
+	  두 판 중 하나만 선다. 고르는 건 CSS라 자바스크립트가 죽어도 폰은 좁은 판을 본다.
+	  경계 720px은 `page.ts`의 NARROW_AT과 짝이다 — 미디어 쿼리는 상수를 못 읽으니
+	  한쪽을 고치면 다른 쪽도 고쳐야 한다.
+	*/
+	.sheet-narrow {
+		display: none;
+	}
+
+	@media (max-width: 719px) {
+		.sheet-wide {
+			display: none;
+		}
+
+		.sheet-narrow {
+			display: block;
+		}
+	}
+
+	.seriesscene text {
 		font-family: var(--stage-sans);
 	}
 
-	#seriesscene .name {
+	.seriesscene .name {
 		font-family: var(--stage-serif);
 		font-weight: 700;
 	}
 
-	#seriesscene .mono {
+	.seriesscene .mono {
 		font-family: var(--stage-mono);
 	}
 
-	#seriesscene a {
+	.seriesscene a {
 		cursor: pointer;
 	}
 
-	#seriesscene a text,
-	#seriesscene a circle {
+	.seriesscene a text,
+	.seriesscene a circle {
 		transition:
 			opacity 0.18s ease,
 			fill 0.18s ease;
 	}
 
-	#seriesscene a:hover text,
-	#seriesscene a:focus-visible text {
+	.seriesscene a:hover text,
+	.seriesscene a:focus-visible text {
 		fill: #ffffff;
 	}
 
-	#seriesscene a:hover .mono,
-	#seriesscene a:focus-visible .mono {
+	.seriesscene a:hover .mono,
+	.seriesscene a:focus-visible .mono {
 		fill: #b6b2aa;
 	}
 
 	/* 회차 번호만은 시리즈 색을 지킨다 — 선 위의 점과 한 몸이다. */
-	#seriesscene a:hover .ep-no,
-	#seriesscene a:focus-visible .ep-no {
+	.seriesscene a:hover .ep-no,
+	.seriesscene a:focus-visible .ep-no {
 		fill: var(--series-accent);
 		opacity: 1;
 	}
@@ -320,8 +376,8 @@ const n = (value: number) => Number(value.toFixed(3));
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		#seriesscene a text,
-		#seriesscene a circle {
+		.seriesscene a text,
+		.seriesscene a circle {
 			transition: none;
 		}
 	}
