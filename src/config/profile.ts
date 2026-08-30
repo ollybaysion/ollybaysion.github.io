@@ -19,10 +19,13 @@ export interface Profile {
 	 * 이름 아래 한 줄 — 화면에만 나가는 제사(題詞).
 	 *
 	 * `lead`는 낱말, `gloss`는 그 옆에 붙는 어원(한자·원어)이다. 둘은 같은 크기 같은 색으로
-	 * 한 줄에 서고, 좁은 화면에서는 `gloss`가 물러난다. `meaning`은 그 낱말의 뜻이라
-	 * 늘 떠 있지 않고 제사에 손을 올렸을 때만 아래에 나타난다.
+	 * 한 줄에 서고, 좁은 화면에서는 `gloss`가 물러난다.
+	 *
+	 * `note`는 그 낱말이 무슨 말인지 풀어 쓴 글, `source`는 그 글의 출처다. 제사에 손을
+	 * 올렸을 때만 아래에 나타난다 — 늘 떠 있으면 이름 아래가 문단이 된다. 화면에서
+	 * 폭에 맞춰 줄이 나뉘니 줄바꿈을 넣지 말고 한 문장으로 쓴다.
 	 */
-	tagline: { lead: string; gloss: string; meaning: string };
+	tagline: { lead: string; gloss: string; note: string; source: string };
 	/** 탭·검색 결과·RSS에 나가는 설명. 제사와 하는 일이 달라 따로 둔다. */
 	description: string;
 	social: { github: string; instagram: string };

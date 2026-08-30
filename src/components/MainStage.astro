@@ -90,16 +90,33 @@ const TAGLINE_W =
 const TAGLINE_GLOSS_MIN_W = needW(TAGLINE_W, 2);
 
 /**
- * 낱말의 뜻 — 손을 올렸을 때만 제사 아래에 나타난다.
+ * 낱말을 풀어 쓴 글 — 손을 올렸을 때만 제사 아래에 나타난다.
  *
- * 크기·색·나타나는 방식은 별자리 설명(`.series-caption`)과 같은 문법이다. 늘 떠 있으면
- * 제사가 두 줄이 되어 이름 아래가 무거워지고, 뜻은 한 번 읽으면 되는 것이라 숨겨 둔다.
+ * 나타나는 방식은 별자리 설명(`.series-caption`)과 같은 문법이다. 늘 떠 있으면 이름
+ * 아래가 문단이 되어 명함이 아니라 서문이 된다.
+ *
+ * 110에서 접는 건 4:3 화면(정본 폭 1053)의 좌측 프레임선 안쪽 자리가 125라서다.
+ * 세 줄이 아이콘 자리(local 64)를 지나 내려가니, 글이 떠 있는 동안 아이콘이 물러난다.
  */
-const MEANING_Y = TAGLINE_Y + 17;
-const MEANING_SIZE = 10;
-const MEANING_MIN_W = needW(textWidth(PROFILE.tagline.meaning, MEANING_SIZE), 2);
-/** 손이 닿는 자리 — 글자만이 아니라 제사 줄 전체가 받는다. */
-const EPIGRAPH_SHIELD = { y: TAGLINE_Y - 14, h: MEANING_Y + 6 - (TAGLINE_Y - 14) };
+const NOTE_Y = TAGLINE_Y + 17;
+const NOTE_SIZE = 10;
+const NOTE_LINE_H = 12;
+const NOTE_LINES = wrapText(PROFILE.tagline.note, NOTE_SIZE, 110, 4);
+const NOTE_SOURCE_SIZE = 8.5;
+const NOTE_SOURCE_Y = NOTE_Y + NOTE_LINES.length * NOTE_LINE_H + 2;
+const NOTE_MIN_W = needW(
+	Math.max(
+		...NOTE_LINES.map((line) => textWidth(line, NOTE_SIZE)),
+		textWidth(PROFILE.tagline.source, NOTE_SOURCE_SIZE),
+	),
+	2,
+);
+/**
+ * 손이 닿는 자리 — 글자만이 아니라 제사 줄 전체가 받는다.
+ *
+ * 제사 줄까지만 덮는다. 풀이가 뜨는 자리까지 늘리면 그 밑의 아이콘 링크를 가린다.
+ */
+const EPIGRAPH_SHIELD = { y: TAGLINE_Y - 14, h: 23 };
 
 /**
  * 좌측 명함의 이력 무리 — ALUMNI · CERTIFICATES.
@@ -127,8 +144,14 @@ const CARD_SECTIONS = [
 	{ label: 'CERTIFICATES', entries: PROFILE.certificates },
 ].filter((section) => section.entries.length > 0);
 
-/** 연도 열 끝 — 그 무리에서 가장 긴 연도가 정한다. 연도는 여기에 오른쪽 맞춤한다. */
-function yearRight(entries: readonly { years: string }[]): number {
+/**
+ * 연도 열의 폭 — 그 무리에서 가장 긴 연도가 정한다.
+ *
+ * 연도는 이 열 안에서 **왼쪽 맞춤**이다. 오른쪽 맞춤을 해봤더니 `2024–`처럼 끝이
+ * 열린 기간에서 en dash가 열 끝에 걸려 홈이 붙어 보였고, 시작 연도가 어긋나 위아래로
+ * 읽히지 않았다. 왼쪽에 붙이면 시작 연도가 한 줄로 서고, 오른쪽은 en dash가 알아서 만다.
+ */
+function yearWidth(entries: readonly { years: string }[]): number {
 	return Math.ceil(
 		Math.max(...entries.map((entry) => [...entry.years].length)) *
 			CARD_MONO_RATIO *
@@ -153,7 +176,7 @@ const CARD_WRAP_LIMIT = 158;
 let cardY = 0;
 const CARD_BLOCKS = CARD_SECTIONS.map((section, index) => {
 	const labelY = index === 0 ? 0 : cardY + CARD_SECTION_GAP;
-	const whatX = yearRight(section.entries) + CARD_GUTTER;
+	const whatX = yearWidth(section.entries) + CARD_GUTTER;
 	let rowY = labelY + CARD_LABEL_GAP;
 	const rows = section.entries.map((entry, i) => {
 		if (i > 0) rowY += CARD_ENTRY_GAP;
@@ -163,7 +186,7 @@ const CARD_BLOCKS = CARD_SECTIONS.map((section, index) => {
 		return row;
 	});
 	cardY = rowY;
-	return { label: section.label, labelY, whatX, yearR: whatX - CARD_GUTTER, rows };
+	return { label: section.label, labelY, whatX, rows };
 });
 const CARD_BOTTOM = cardY;
 
@@ -451,15 +474,23 @@ const REFLECTIONS = [
 						>{PROFILE.tagline.gloss}</tspan
 					>
 				</text>
-				<text
-					class="epigraph-meaning"
-					data-min-w={MEANING_MIN_W}
-					x="0"
-					y={MEANING_Y}
-					font-size={MEANING_SIZE}
-					fill="#8f8c85">
-					{PROFILE.tagline.meaning}
-				</text>
+				<g class="epigraph-note" data-min-w={NOTE_MIN_W}>
+					<text x="0" y={NOTE_Y} font-size={NOTE_SIZE} fill="#8f8c85">
+						{NOTE_LINES.map((line, i) => (
+							<tspan x="0" y={NOTE_Y + i * NOTE_LINE_H}>
+								{line}
+							</tspan>
+						))}
+					</text>
+					<text
+						x="0"
+						y={NOTE_SOURCE_Y}
+						font-size={NOTE_SOURCE_SIZE}
+						fill="#8f8c85"
+						opacity="0.6">
+						{PROFILE.tagline.source}
+					</text>
+				</g>
 			</g>
 		</g>
 
@@ -515,13 +546,7 @@ const REFLECTIONS = [
 							</text>
 							{block.rows.map((row) => (
 								<text class="al-line" x="0" y={row.y} font-size={CARD_SIZE}>
-									<tspan
-										class="mono"
-										x={block.yearR}
-										text-anchor="end"
-										font-size={CARD_YEAR_SIZE}
-										opacity="0.7"
-									>
+									<tspan class="mono" x="0" font-size={CARD_YEAR_SIZE} opacity="0.7">
 										{row.years}
 									</tspan>
 									{row.lines.map((line, i) => (
@@ -649,14 +674,29 @@ const REFLECTIONS = [
 		opacity: 0;
 	}
 
-	/* 뜻은 손을 올렸을 때만 — 별자리 설명과 같은 문법이다. */
-	.epigraph-meaning {
+	/* 풀이는 손을 올렸을 때만 — 별자리 설명과 같은 문법이다. */
+	.epigraph-note {
 		opacity: 0;
+		/* 뜬 글자가 손을 다시 받으면 깜빡인다 — 판정은 제사 줄의 방패만 한다. */
+		pointer-events: none;
 		transition: opacity 0.18s ease;
 	}
 
-	.epigraph:hover .epigraph-meaning:not(.is-hidden) {
-		opacity: 0.9;
+	.epigraph:hover .epigraph-note:not(.is-hidden) {
+		opacity: 1;
+	}
+
+	/*
+	  풀이가 세 줄이라 아이콘 자리를 지나 내려온다 — 그동안 아이콘이 물러난다.
+	  희미하게 남기면 유령이 글자 위에 겹치니 아예 지운다.
+	*/
+	#social {
+		transition: opacity 0.18s ease;
+	}
+
+	#sitename:has(.epigraph:hover) ~ #social {
+		opacity: 0;
+		pointer-events: none;
 	}
 
 	#alumni-col {
