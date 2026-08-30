@@ -55,7 +55,7 @@ describe('neighborsOf', () => {
 		);
 	});
 
-	it('근방이 0편이어도 죽지 않는다', () => {
+	it('가까운 글이 0편이어도 죽지 않는다', () => {
 		assert.deepEqual(neighborsOf(all[0]!, [all[0]!]), []);
 	});
 });

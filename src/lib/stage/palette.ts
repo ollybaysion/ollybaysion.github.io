@@ -8,6 +8,7 @@
  * 그 숫자가 그대로 등록부의 커피(#d9a154, 중심 270°)·개발(#5b8def, 중심 90°)이다.
  * 그래서 색을 베끼지 않고 등록부에서 다시 만든다 — 카테고리를 추가하면 색도 따라온다.
  */
+import type { CategoryDef } from "../../config/categories.ts";
 import { categories, colorOf } from "../../config/categories.ts";
 import {
   angularDistance,
@@ -53,38 +54,53 @@ export function centerAngle(arc: Arc): number {
   return toAbsolute(arc, arcSpan(arc) / 2);
 }
 
-interface Stop {
+/** 색 정거장 하나 — 호 중심과 그 자리의 색. */
+export interface ColorStop {
   angle: number;
   color: Rgb;
 }
 
 const CATEGORY_ORDER = Object.keys(categories);
 
-/** 등록부 → 각도순 색 정거장. 모듈 로드 때 한 번만 만든다. */
-const STOPS: Stop[] = Object.entries(categories)
-  .map(([, def]) => ({
-    angle: centerAngle(def.arc),
-    color: parseHex(def.color.base),
-  }))
-  .sort((a, b) => a.angle - b.angle);
+/** 등록부 → 각도순 색 정거장. */
+export function colorStops(defs: Record<string, CategoryDef>): ColorStop[] {
+  return Object.values(defs)
+    .map((def) => ({
+      angle: centerAngle(def.arc),
+      color: parseHex(def.color.base),
+    }))
+    .sort((a, b) => a.angle - b.angle);
+}
 
 /**
- * 각도에 놓인 색. 이웃한 두 호 중심 사이를 각도 비율로 섞는다.
- * 카테고리가 하나뿐이면 어디서나 그 색이다.
+ * 정거장 사이를 각도 비율로 섞는다. 정거장이 하나뿐이면 어디서나 그 색이다.
+ *
+ * 등록부가 아니라 정거장을 받는다 — **섞는 방식**과 **지금 등록된 카테고리**는 다른
+ * 문제라서다. 앞은 정본이 손으로 적어둔 그대로 고정이고, 뒤는 카테고리를 들일 때마다
+ * 늘어난다. 갈라 놓아야 정본 대조가 등록부 변경에 휘둘리지 않는다.
  */
-export function angleRgb(angle: number): Rgb {
-  if (STOPS.length === 1) return STOPS[0]!.color;
+export function rgbAt(stops: readonly ColorStop[], angle: number): Rgb {
+  if (stops.length === 0) throw new Error("색 정거장이 하나도 없다");
+  if (stops.length === 1) return stops[0]!.color;
 
   const a = norm360(angle);
-  for (let i = 0; i < STOPS.length; i += 1) {
-    const lo = STOPS[i]!;
-    const hi = STOPS[(i + 1) % STOPS.length]!;
+  for (let i = 0; i < stops.length; i += 1) {
+    const lo = stops[i]!;
+    const hi = stops[(i + 1) % stops.length]!;
     const span = norm360(hi.angle - lo.angle) || 360;
     const offset = norm360(a - lo.angle);
     if (offset <= span) return mixRgb(lo.color, hi.color, offset / span);
   }
   // 위 순회는 반드시 한 구간에 걸린다. 부동소수 끝자락 대비 폴백.
-  return STOPS[0]!.color;
+  return stops[0]!.color;
+}
+
+/** 지금 등록된 카테고리로 만든 정거장. 모듈 로드 때 한 번만 만든다. */
+const STOPS = colorStops(categories);
+
+/** 각도에 놓인 색. 이웃한 두 호 중심 사이를 각도 비율로 섞는다. */
+export function angleRgb(angle: number): Rgb {
+  return rgbAt(STOPS, angle);
 }
 
 export function angleColor(angle: number): string {

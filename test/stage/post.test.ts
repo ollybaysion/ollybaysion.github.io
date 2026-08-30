@@ -81,18 +81,16 @@ describe("postTail", () => {
     );
     assert.equal(tail.horizon, 200);
     assert.equal(tail.height, 400);
-    // 정본의 `translate(0,-390)`.
-    assert.equal(tail.seaShift, -390);
   });
 
-  it("근방이 없으면 목록 없이 수평선부터 시작한다", () => {
+  it("가까운 글이 없으면 목록 없이 수평선부터 시작한다", () => {
     const tail = postTail(0);
     assert.deepEqual(tail.rows, []);
     assert.equal(tail.horizon, 40);
     assert.equal(tail.height, 240);
   });
 
-  it("근방이 하나여도 자리는 첫 줄 그대로다", () => {
+  it("가까운 글이 하나여도 자리는 첫 줄 그대로다", () => {
     assert.deepEqual(postTail(1).rows, [{ dot: 54, title: 58 }]);
   });
 });

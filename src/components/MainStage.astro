@@ -18,7 +18,7 @@ import { meanAngle } from '../lib/coords/arc.ts';
 import { labelPlacement } from '../lib/stage/label.ts';
 import { EDGE_L as EDGE } from '../lib/stage/list.ts';
 import { angleColor } from '../lib/stage/palette.ts';
-import { GLADE_BAND_COUNT, GLADE_GLINTS, HORIZON_Y } from '../lib/stage/sea.ts';
+import { GLADE_BAND_COUNT, GLADE_GLINTS, HORIZON_Y, SEA_DEPTH } from '../lib/stage/sea.ts';
 import { textWidth, wrapText } from '../lib/stage/text.ts';
 
 const posts = postsData.posts.map((post) => ({
@@ -211,6 +211,15 @@ const CARD_COL_W = Math.max(
  */
 const CARD_MIN_W = needW(CARD_COL_W, 2);
 
+/**
+ * 목록 화면이 있는 카테고리.
+ *
+ * 등록부에는 호가 있어도 글이 한 편도 없으면 `/list/{이름}/` 길이 나지 않는다
+ * (`[category].astro`가 파생 데이터에서 길을 뽑는데, 파생은 글에서 나온다).
+ * 그런 카테고리 자리를 눌렀을 때 없는 길로 보내지 않으려고 무대에 적어 둔다.
+ */
+const LISTED = [...new Set(postsData.posts.map((post) => post.category))];
+
 const PANEL_ROWS = [592, 624, 656, 688, 720];
 ---
 
@@ -220,6 +229,7 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		viewBox="0 0 700 790"
 		aria-hidden="true"
 		data-d-max={postsData.dMax}
+		data-listed={LISTED.join(',')}
 	>
 		<defs>
 			{/*
@@ -287,10 +297,16 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 			</filter>
 			{/* 달길 기둥 — 수평선 쪽이 밝고 관찰자 쪽으로 잦아든다. */}
 			<linearGradient id="gladecol" x1="0" y1="0" x2="0" y2="1">
-				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.5"></stop>
-				<stop offset="55%" stop-color="#d9a154" stop-opacity="0.16"></stop>
-				<stop offset="100%" stop-color="#d9a154" stop-opacity="0.03"></stop>
+				<stop offset="0%" stop-color="#d9a154" stop-opacity="0.5" data-glade-stop></stop>
+				<stop offset="55%" stop-color="#d9a154" stop-opacity="0.16" data-glade-stop></stop>
+				<stop offset="100%" stop-color="#d9a154" stop-opacity="0.03" data-glade-stop></stop>
 			</linearGradient>
+			{/* 그림자 띠 — 가운데만 짙고 가장자리로 없어진다. 물 위의 그림자에는 테두리가 없다. */}
+			<radialGradient id="gladeband">
+				<stop offset="0%" stop-color="#131316" stop-opacity="1"></stop>
+				<stop offset="45%" stop-color="#131316" stop-opacity="0.82"></stop>
+				<stop offset="100%" stop-color="#131316" stop-opacity="0"></stop>
+			</radialGradient>
 		</defs>
 
 		<circle cx="350" cy="235" r="210" fill="url(#clothfield)"></circle>
@@ -334,19 +350,19 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		  바다 — 수평선 아래 전폭 캔버스. 먹선 파도가 여기서 태어나 물가로 내려온다.
 		  자리와 픽셀 크기는 layout()이 화면에 맞춘다.
 		*/}
-		<foreignObject id="sea-fo" x="0" y={HORIZON_Y} width="700" height="272">
-			<canvas id="seacv" style="display:block;width:100%;height:100%"></canvas>
+		<foreignObject id="sea-fo" data-sea x="0" y={HORIZON_Y} width="700" height={SEA_DEPTH}>
+			<canvas style="display:block;width:100%;height:100%"></canvas>
 		</foreignObject>
 
 		{/*
 		  윤슬 — 달길 빛기둥 위의 물비늘. 그림자 띠와 낱알 점등은 능선 위상이 아니라
 		  파도가 그 깊이를 실제로 지나갈 때 켜진다(main-stage.ts).
 		*/}
-		<g id="glade">
-			<path id="glade-col" d="" fill="url(#gladecol)" filter="url(#soften)"></path>
+		<g id="glade" data-glade>
+			<path data-glade-col d="" fill="url(#gladecol)" filter="url(#soften)"></path>
 			{/* 빛구멍 한가운데가 수면에 닿은 자리 — 그 색을 그대로 받는다(data-wash). */}
 			<ellipse
-				id="glade-core"
+				data-glade-core
 				cx="350"
 				cy="552"
 				rx="24"
@@ -355,15 +371,15 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 				data-wash="0.95"
 				opacity="0.45"
 				filter="url(#soften)"></ellipse>
-			<g id="glade-bands">
+			<g>
 				{
 					Array.from({ length: GLADE_BAND_COUNT }, () => (
-						<rect fill="#131316" opacity="0" />
+						<ellipse data-glade-band cx="350" fill="url(#gladeband)" opacity="0" />
 					))
 				}
 			</g>
 			{/* 낱알 색은 무리에서 물려받는다 — 광원 색이 바뀌면 한 자리만 고치면 되게. */}
-			<g id="glade-glints" fill="#d9a154">
+			<g data-glade-glints fill="#d9a154">
 				{
 					GLADE_GLINTS.map((glint) => (
 						<rect
@@ -480,7 +496,7 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 
 		{/*
 		  좌측 열 = 명함. 이름 → 포인트 문장 → 아이콘 → ALUMNI 순으로 화면 왼쪽 끝에 붙는다.
-		  자리는 layout()이 잡는다(시안: 이름 minY+70 · 아이콘 minY+116 · ALUMNI 196).
+		  자리는 layout()이 잡는다(이름 minY+70 · 아이콘 minY+116 · 명함 226).
 		*/}
 		<g id="sitename">
 			<text class="mono" x="0" y="0" font-size="32" letter-spacing="1" fill="#8f8c85"

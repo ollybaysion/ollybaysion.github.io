@@ -70,7 +70,7 @@ await mkdir(GENERATED_DIR, { recursive: true });
 await Promise.all([
 	// 메인 화면 클라이언트가 통째로 받는 전 글 좌표.
 	writeJson(path.join(GENERATED_DIR, 'posts.json'), { ...meta, posts: placed }),
-	// 글 화면 "이 글 근방" — 빌드 시 고정, 클릭마다 재계산하지 않는다.
+	// 글 화면 "가까운 글" — 빌드 시 고정, 클릭마다 재계산하지 않는다.
 	writeJson(path.join(GENERATED_DIR, 'neighbors.json'), {
 		...meta,
 		neighbors: neighborMap(placed, NEIGHBOR_LIMIT),
