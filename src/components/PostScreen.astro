@@ -2,13 +2,15 @@
 /**
  * 글 화면 — 픽셀 정본 = `~/repo/blog-screens/Post.dc.html`.
  *
- * 세 덩어리다: 머리(빛구멍 · 카테고리 · 제목 · 이 글의 좌표) → 본문 → 꼬리(가까운 글 · 수평선 · 바다).
+ * 세 덩어리다: 머리(빛구멍 · 카테고리 · 제목 · 이 글의 좌표) → 본문 → 꼬리(가까운 글 · 다른 자리에서
+ * 닮은 글 · 수평선 · 바다).
  * 시리즈 글이면 본문과 꼬리 사이에 별자리 스트립이 하나 낀다.
  *
  * 자리·크기는 `src/lib/stage/post.ts`가 정하고, 가까운 글은 빌드 때 박힌 `neighbors.json`을 그대로 읽는다 —
  * 화면에서 다시 계산하지 않는다.
  */
 import categoriesData from '../data/generated/categories.json';
+import discoveriesData from '../data/generated/discoveries.json';
 import neighborsData from '../data/generated/neighbors.json';
 import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
@@ -70,7 +72,27 @@ const neighbors = (neighborsData.neighbors[slug] ?? [])
 		];
 	});
 
-const tail = postTail(neighbors.length);
+/**
+ * 다른 자리에서 닮은 글 — 발견 레이어.
+ *
+ * 각도가 카테고리 부채꼴에 갇혀 있으니 이 글들은 화면에서 멀다. 그래서 근접도(%)를
+ * 붙이지 않는다 — 독자가 보는 숫자는 언제나 화면 거리에서 나와야 하는데, 여기 실린 건
+ * 거리가 아니라 글 내용이 이어 준 것이기 때문이다. 대신 어느 카테고리에서 왔는지를 적는다.
+ */
+const discoveries = (discoveriesData.discoveries[slug] ?? []).flatMap((found) => {
+	const entry = bySlug.get(found.slug);
+	if (!entry) return [];
+	return [
+		{
+			slug: found.slug,
+			title: truncateText(entry.title, 13.5, EDGE_R - 76 - 64),
+			category: entry.category,
+			color: angleColor(entry.angle),
+		},
+	];
+});
+
+const tail = postTail(neighbors.length, discoveries.length);
 
 /** 시리즈 스트립 — 별자리를 상자에 눕히고 이 글의 회차를 밝힌다. */
 const members = post.series ? (seriesData.series[post.series] ?? []) : [];
@@ -379,6 +401,64 @@ const dot = minimapDot(post);
 					</text>
 				</a>
 			))
+		}
+
+		{
+			tail.discovery && (
+				<>
+					<text
+						x={EDGE_L}
+						y={tail.discovery.label}
+						font-size="10.5"
+						letter-spacing="3"
+						fill="#8f8c85"
+					>
+						다른 자리에서 닮은 글
+					</text>
+					<text
+						x={EDGE_R}
+						y={tail.discovery.label}
+						text-anchor="end"
+						font-size="10.5"
+						fill="#8f8c85"
+						opacity="0.8"
+					>
+						화면에서는 멀다 · 글이 이어 준다
+					</text>
+					{discoveries.map((found, i) => (
+						<a href={`/blog/${found.slug}/`}>
+							<rect
+								class="hit"
+								x={EDGE_L}
+								y={tail.discovery!.rows[i]!.dot - 15}
+								width={EDGE_R - EDGE_L}
+								height="30"
+							/>
+							{/* 빈 점 — 가까운 글의 채운 점과 달리 거리로 이어진 게 아니라는 표시다. */}
+							<circle
+								cx="56"
+								cy={tail.discovery!.rows[i]!.dot}
+								r="3"
+								fill="none"
+								stroke={found.color}
+								stroke-width="1.5"
+							/>
+							<text x="76" y={tail.discovery!.rows[i]!.title} font-size="13.5" fill="#d8d5cd">
+								{found.title}
+							</text>
+							<text
+								x={EDGE_R}
+								y={tail.discovery!.rows[i]!.title}
+								text-anchor="end"
+								font-size="11"
+								fill="#8f8c85"
+							>
+								{found.category}
+							</text>
+						</a>
+					))}
+				</>
+			)
 		}
 
 		<line

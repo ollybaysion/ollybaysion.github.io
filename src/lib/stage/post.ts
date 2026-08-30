@@ -86,17 +86,21 @@ export function stripPoints(nodes: readonly Point[]): Point[] {
 	return nodes.map((_, i) => ({ x: xs[i]!, y: ys[i]! }));
 }
 
-/** 꼬리 — 가까운 글 목록, 수평선, 그 아래 밴드 바다. */
+/** 꼬리 — 글 목록 덩어리들, 수평선, 그 아래 바다. */
 const TAIL = {
 	label: 24,
-	firstRow: 54,
 	stride: 34,
 	dotX: 56,
 	dotR: 3,
 	textX: 76,
 	titleDy: 4,
-	/** 가까운 글이 있을 때와 없을 때의 수평선 자리. */
-	horizon: 200,
+	/** 덩어리 제목에서 그 아래 첫 줄까지. 정본의 24 → 54. */
+	labelDy: 30,
+	/** 앞 덩어리의 마지막 줄에서 다음 덩어리 제목까지. */
+	blockGap: 52,
+	/** 마지막 줄에서 수평선까지. 정본의 122 → 200. */
+	rowToHorizon: 78,
+	/** 실을 글이 하나도 없을 때의 수평선 자리. */
 	bareHorizon: 40,
 	/**
 	 * 수평선 아래 바다가 차지하는 높이.
@@ -112,23 +116,51 @@ export interface NeighborRow {
 	title: number;
 }
 
+/** 제목 하나와 그 아래 줄들. 꼬리는 이런 덩어리를 위에서부터 쌓는다. */
+export interface TailBlock {
+	label: number;
+	rows: NeighborRow[];
+}
+
 export interface PostTail {
 	label: number;
 	rows: NeighborRow[];
+	/** "다른 자리에서 닮은 글". 없으면 null이고 수평선이 그만큼 올라온다. */
+	discovery: TailBlock | null;
 	horizon: number;
 	height: number;
 }
 
-/** 가까운 글 편수 → 꼬리 배치. 없으면 목록 없이 수평선부터 시작한다. */
-export function postTail(count: number): PostTail {
-	const rows = Array.from({ length: count }, (_, i) => {
-		const dot = TAIL.firstRow + i * TAIL.stride;
-		return { dot, title: dot + TAIL.titleDy };
-	});
-	const horizon = count > 0 ? TAIL.horizon : TAIL.bareHorizon;
+/** 제목 자리에서 시작하는 덩어리 하나. */
+function block(label: number, count: number): TailBlock {
 	return {
-		label: TAIL.label,
-		rows,
+		label,
+		rows: Array.from({ length: count }, (_, i) => {
+			const dot = label + TAIL.labelDy + i * TAIL.stride;
+			return { dot, title: dot + TAIL.titleDy };
+		}),
+	};
+}
+
+/**
+ * 실을 글 편수 → 꼬리 배치. 덩어리를 위에서부터 쌓고 마지막 줄 아래에 수평선을 놓는다.
+ * 실을 글이 하나도 없으면 목록 없이 수평선부터 시작한다.
+ */
+export function postTail(count: number, discoveryCount = 0): PostTail {
+	const near = block(TAIL.label, count);
+	let last = near.rows.at(-1)?.dot ?? null;
+
+	let discovery: TailBlock | null = null;
+	if (discoveryCount > 0) {
+		discovery = block(last === null ? TAIL.label : last + TAIL.blockGap, discoveryCount);
+		last = discovery.rows.at(-1)!.dot;
+	}
+
+	const horizon = last === null ? TAIL.bareHorizon : last + TAIL.rowToHorizon;
+	return {
+		label: near.label,
+		rows: near.rows,
+		discovery,
 		horizon,
 		height: horizon + TAIL.sea,
 	};

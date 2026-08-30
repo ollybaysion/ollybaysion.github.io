@@ -93,6 +93,46 @@ describe("postTail", () => {
   it("가까운 글이 하나여도 자리는 첫 줄 그대로다", () => {
     assert.deepEqual(postTail(1).rows, [{ dot: 54, title: 58 }]);
   });
+
+  it("발견 레이어가 없으면 discovery가 null이다", () => {
+    assert.equal(postTail(3).discovery, null);
+    assert.equal(postTail(0).discovery, null);
+  });
+
+  it("닮은 글 덩어리는 가까운 글 아래에 쌓이고 수평선을 민다", () => {
+    const tail = postTail(3, 2);
+    assert.equal(tail.discovery?.label, 174);
+    assert.deepEqual(
+      tail.discovery?.rows.map((row) => row.dot),
+      [204, 238],
+    );
+    assert.equal(tail.horizon, 316);
+    assert.equal(tail.height, 516);
+  });
+
+  it("가까운 글이 없으면 닮은 글이 맨 위 제목 자리를 받는다", () => {
+    const tail = postTail(0, 2);
+    assert.deepEqual(tail.rows, []);
+    assert.equal(tail.discovery?.label, 24);
+    assert.deepEqual(
+      tail.discovery?.rows.map((row) => row.dot),
+      [54, 88],
+    );
+    assert.equal(tail.horizon, 166);
+  });
+
+  it("어느 덩어리든 마지막 줄과 수평선 사이는 정본의 78이다", () => {
+    for (const [near, far] of [
+      [3, 0],
+      [3, 3],
+      [1, 2],
+      [0, 1],
+    ]) {
+      const tail = postTail(near, far);
+      const last = tail.discovery?.rows.at(-1) ?? tail.rows.at(-1);
+      assert.equal(tail.horizon - last!.dot, 78, `${near}+${far}`);
+    }
+  });
 });
 
 describe("stripPoints", () => {
