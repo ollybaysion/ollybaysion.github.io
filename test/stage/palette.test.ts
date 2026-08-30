@@ -10,11 +10,26 @@ import {
   arcDistance,
   categoryColor,
   centerAngle,
+  colorStops,
   mixRgb,
   nearestCategory,
   parseHex,
+  rgbAt,
   toRgbString,
 } from "../../src/lib/stage/palette.ts";
+
+/**
+ * 정본이 살던 두 카테고리 세계.
+ *
+ * 정본은 커피·개발 둘뿐인 무대라 색이 그 두 정거장 사이에서만 나왔다. 등록부에
+ * 카테고리가 늘면 정거장도 늘어 같은 각도의 색이 달라진다 — 설계가 그렇게 돼 있다
+ * (`palette.ts` 머리말). 그래서 정본 대조는 등록부가 아니라 **정본의 정거장**에 건다.
+ * 여기서 지키는 건 색표가 아니라 섞는 방식이다.
+ */
+const CANON_STOPS = colorStops({
+  커피: { arc: [210, 330], color: { base: "#d9a154", deep: "#8f5a1e" } },
+  개발: { arc: [30, 150], color: { base: "#5b8def", deep: "#1e448f" } },
+});
 
 /** `Main.dc.html`의 `.post` 각도 → 그 글 점에 박힌 fill. */
 const CANON: Array<[number, string]> = [
@@ -103,7 +118,7 @@ describe("angleColor", () => {
 
   it("정본이 글마다 박아둔 색을 그대로 만든다", () => {
     for (const [angle, hex] of CANON) {
-      assert.equal(hexOf(angleColor(angle)), hex, `${angle}°`);
+      assert.equal(hexOf(toRgbString(rgbAt(CANON_STOPS, angle))), hex, `${angle}°`);
     }
   });
 
@@ -112,9 +127,21 @@ describe("angleColor", () => {
     assert.equal(angleColor(450), angleColor(90));
   });
 
-  it("두 호의 한가운데(180°·0°)에서는 정확히 반반", () => {
-    assert.equal(hexOf(angleColor(180)), "#9a97a2");
-    assert.equal(angleColor(0), angleColor(180));
+  it("정본 세계에서는 두 호의 한가운데(180°·0°)가 정확히 반반", () => {
+    assert.equal(hexOf(toRgbString(rgbAt(CANON_STOPS, 180))), "#9a97a2");
+    assert.deepEqual(rgbAt(CANON_STOPS, 0), rgbAt(CANON_STOPS, 180));
+  });
+
+  it("이제 180°·0°는 영화·여행의 색이다", () => {
+    assert.equal(hexOf(angleColor(180)), "#a06ecb");
+    assert.equal(hexOf(angleColor(0)), "#4faa7d");
+  });
+
+  it("정거장이 하나면 어디서나 그 색", () => {
+    const one = colorStops({
+      커피: { arc: [210, 330], color: { base: "#d9a154", deep: "#8f5a1e" } },
+    });
+    assert.deepEqual(rgbAt(one, 17), parseHex("#d9a154"));
   });
 });
 
@@ -141,15 +168,18 @@ describe("nearestCategory", () => {
     assert.equal(nearestCategory(149), "개발");
   });
 
-  it("빈 호에서는 가까운 쪽을 준다", () => {
-    assert.equal(nearestCategory(170), "개발");
-    assert.equal(nearestCategory(190), "커피");
-    assert.equal(nearestCategory(350), "커피");
-    assert.equal(nearestCategory(10), "개발");
+  it("옆자리 두 호도 제 주인이 있다", () => {
+    assert.equal(nearestCategory(180), "영화");
+    assert.equal(nearestCategory(151), "영화");
+    assert.equal(nearestCategory(0), "여행");
+    assert.equal(nearestCategory(350), "여행");
+    assert.equal(nearestCategory(29), "여행");
   });
 
-  it("정확히 반반이면 등록 순서가 이긴다", () => {
-    assert.equal(nearestCategory(180), "커피");
+  it("호가 원을 다 채웠으니 어느 각도든 주인이 있다", () => {
+    for (let deg = 0; deg < 360; deg += 1) {
+      assert.equal(arcDistance(arcOf(nearestCategory(deg)), deg), 0, `${deg}°`);
+    }
   });
 });
 
@@ -157,5 +187,7 @@ describe("categoryColor", () => {
   it("호 중심의 색과 같다", () => {
     assert.equal(categoryColor("커피"), angleColor(270));
     assert.equal(categoryColor("개발"), angleColor(90));
+    assert.equal(categoryColor("영화"), angleColor(180));
+    assert.equal(categoryColor("여행"), angleColor(0));
   });
 });

@@ -6,5 +6,13 @@
   "개발": {
     "arc": [30, 150],
     "color": { "base": "#5b8def", "deep": "#1e448f" }
+  },
+  "영화": {
+    "arc": [150, 210],
+    "color": { "base": "#a06ecb", "deep": "#4c2a80" }
+  },
+  "여행": {
+    "arc": [330, 30],
+    "color": { "base": "#4faa7d", "deep": "#1d6b4a" }
   }
 }

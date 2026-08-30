@@ -147,6 +147,10 @@ function start(svg: SVGSVGElement): void {
   const pName = svg.querySelector<SVGTextElement>("#p-name")!;
   const pMore = svg.querySelector<SVGAElement>("#p-more")!;
   const pMoreText = pMore.querySelector<SVGTextElement>("text")!;
+  /** 목록 화면이 있는 카테고리(MainStage가 적어 둔다). */
+  const listed = new Set(
+    (svg.dataset.listed ?? "").split(",").filter((name) => name !== ""),
+  );
   const cliText = svg.querySelector<SVGTextElement>("#cli-text")!;
   const cliCaret = svg.querySelector<SVGRectElement>("#cli-caret")!;
   const modal = svg.querySelector<SVGGElement>("#modal")!;
@@ -283,11 +287,17 @@ function start(svg: SVGSVGElement): void {
     const category = nearestCategory(angle);
 
     pName.textContent = category;
-    pMoreText.textContent = "목록 자세히 →";
-    pMore.setAttribute(
-      "href",
-      `/list/${encodeURIComponent(category)}/?x=${x.toFixed(1)}&y=${y.toFixed(1)}`,
-    );
+    // 글이 없는 카테고리는 목록 화면이 없다 — 없는 길로 보내는 대신 그렇다고 적는다.
+    if (listed.has(category)) {
+      pMoreText.textContent = "목록 자세히 →";
+      pMore.setAttribute(
+        "href",
+        `/list/${encodeURIComponent(category)}/?x=${x.toFixed(1)}&y=${y.toFixed(1)}`,
+      );
+    } else {
+      pMoreText.textContent = "아직 글이 없다";
+      pMore.removeAttribute("href");
+    }
 
     rows.forEach((row, i) => {
       const entry = sorted[i];

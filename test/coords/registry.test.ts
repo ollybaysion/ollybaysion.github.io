@@ -7,10 +7,12 @@ import { arcSpan, norm360 } from '../../src/lib/coords/arc.ts';
 const HEX = /^#[0-9a-f]{6}$/;
 
 describe('categories.json', () => {
-	it('커피·개발 두 종이 등록돼 있다', () => {
-		assert.deepEqual(CATEGORY_NAMES, ['커피', '개발']);
+	it('네 종이 등록돼 있다', () => {
+		assert.deepEqual(CATEGORY_NAMES, ['커피', '개발', '영화', '여행']);
 		assert.deepEqual(arcOf('커피'), [210, 330]);
 		assert.deepEqual(arcOf('개발'), [30, 150]);
+		assert.deepEqual(arcOf('영화'), [150, 210]);
+		assert.deepEqual(arcOf('여행'), [330, 30]);
 	});
 
 	it('모든 호가 [0, 360) 안의 유효한 부채꼴이다', () => {
@@ -36,14 +38,16 @@ describe('categories.json', () => {
 		}
 	});
 
-	it('빈 호 150~210° · 330~30° 는 새 카테고리용으로 비어 있다', () => {
+	it('네 호가 원을 빈틈없이 나눠 갖는다', () => {
 		const claimed = new Set<number>();
 		for (const name of CATEGORY_NAMES) {
 			const [start] = arcOf(name);
 			for (let d = 0; d < arcSpan(arcOf(name)); d += 1) claimed.add(norm360(start + d));
 		}
-		for (const deg of [150, 180, 209, 330, 0, 29]) {
-			assert.ok(!claimed.has(deg), `${deg}° 는 비어 있어야 한다`);
+		// 처음 비워 뒀던 두 호에 영화·여행이 들어갔다. 이제 주인 없는 각도는 없다 —
+		// 다음 카테고리는 호를 쪼개야 하고, 그건 이미 박힌 각도의 뜻을 바꾸는 일이다.
+		for (let deg = 0; deg < 360; deg += 1) {
+			assert.ok(claimed.has(deg), `${deg}° 에 주인이 없다`);
 		}
 	});
 
