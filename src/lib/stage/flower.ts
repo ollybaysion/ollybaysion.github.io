@@ -9,6 +9,7 @@
  * 나뉜 이유는 난수 때문이다 — 구김과 흩어짐은 시드 하나가 정하고, 그 소비 순서가
  * 곧 꽃의 생김새다. 순서를 지켜야 하는 코드를 한곳에 모아 두면 손대다 어긋난다.
  */
+import { CENTER, LIGHT_HOLE_RADIUS } from '../coords/constants.ts';
 import { INK } from './palette.ts';
 
 /** 꽃머리 자리 — 정본 700 열 안, 빛구멍 오른쪽 하늘. */
@@ -26,12 +27,37 @@ export const WALL = 706;
 export const WALL_GAP = 6;
 
 /**
- * 화면 오른쪽 끝이 `right`일 때 그루가 옮겨 앉는 거리.
- *
- * 이름표도 이 값으로 따라 옮긴다 — 표찰이 제 나무를 놓치지 않게 자리 계산은 한 자리에 둔다.
+ * 꽃머리가 `FX`에서 벌어지는 반경 — 자루(41~50)에 크레이프 원반(25~31)과 봉오리까지.
+ * 꽃이 설 자리가 있는지 재는 자다.
  */
-export function treeShift(right: number): number {
-	return Math.max(0, right + WALL_GAP - WALL);
+export const HEAD_R = 82;
+/** 꽃머리와 빛구멍·화면 끝 사이에 두는 한 뼘. */
+const SKY_GAP = 12;
+
+/** 그루가 옮겨 앉는 자리. 이름표도 같은 값으로 따라 옮긴다. */
+export interface TreePlace {
+	dx: number;
+	dy: number;
+}
+
+/**
+ * 화면이 `right`에서 끝나고 `top`에서 시작할 때 그루가 옮겨 앉는 자리.
+ *
+ * 가로는 늘 벽을 화면 끝에 댄다 — 넓은 화면에서는 오른쪽으로 밀고, 잘라 확대한 좁은
+ * 무대에서는 왼쪽으로 당긴다. 어느 폭에서든 꽃머리는 오른쪽 끝에서 같은 거리다.
+ *
+ * 세로는 좁은 무대에서만 움직인다. 폭이 430까지 좁아지면 빛구멍(지름 190) 옆에
+ * 꽃머리(지름 164)가 설 자리가 없다 — 그럴 때 꽃은 물러나는 대신 **빛구멍 위 하늘로
+ * 올라간다**. 가지는 그대로 화면 밖 벽에서 들어오고, 폰에서도 무대에 꽃이 핀다.
+ */
+export function treePlace(right: number, top: number): TreePlace {
+	const dx = right + WALL_GAP - WALL;
+	// 빛구멍 오른쪽에 꽃머리가 통째로 들어가면 정본 그대로다(넓은 화면).
+	if (FX + dx - HEAD_R >= CENTER.x + LIGHT_HOLE_RADIUS + SKY_GAP) return { dx, dy: 0 };
+	// 빛구멍 정수리 위로 올린다 — 다만 꽃머리가 화면 위로 넘어가지 않는 선까지만.
+	const over = CENTER.y - LIGHT_HOLE_RADIUS - SKY_GAP - (HEAD_Y + HEAD_R);
+	const ceiling = top + SKY_GAP - (HEAD_Y - HEAD_R);
+	return { dx, dy: Math.min(0, Math.max(over, ceiling)) };
 }
 
 /**

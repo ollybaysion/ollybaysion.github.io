@@ -38,7 +38,7 @@ import {
   PETAL_POOL,
   RIPPLE_POOL,
   SEED,
-  treeShift,
+  treePlace,
   WALL,
 } from "../lib/stage/flower.ts";
 import { clamp01, noise1, rng } from "../lib/stage/noise.ts";
@@ -52,8 +52,8 @@ const GOLD = "#d9a154";
 export interface FlowerScene {
   /** 모션 줄이기 화면인가 — 매 프레임 부를 필요가 없다는 뜻이다. */
   readonly reduceMotion: boolean;
-  /** 자리가 바뀌었다. 벽이 화면 끝에 오도록 그루째 옮긴다. */
-  resize(box: { left: number; width: number }): void;
+  /** 자리가 바뀌었다. 벽이 화면 끝에 오도록(좁으면 빛구멍 위로) 그루째 옮긴다. */
+  resize(box: { left: number; width: number; top: number }): void;
   /** 한 프레임. 바람은 바다에서 받은 그대로 넘긴다. */
   render(clock: number, dt: number, wind: number, dir: number): void;
 }
@@ -343,8 +343,9 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
   }
   const spring = { b: 0, v: 0 };
   let born = 0;
-  /** 그루가 오른쪽으로 밀린 양. */
+  /** 그루가 옮겨 앉은 양 — 좁은 무대에서는 가로만이 아니라 세로로도 움직인다. */
   let dx = 0;
+  let dy = 0;
   /** 꽃잎이 화면 밖으로 나갔는지 보는 기준 — layout()이 벌린 폭 그대로다. */
   const bounds = { left: 0, right: 700 };
 
@@ -394,7 +395,7 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
           free.alive = true;
           // 그루는 옮겨 갔어도 꽃잎은 전폭 좌표로 산다 — 지는 순간에만 이동량을 더한다.
           free.x = from.x + dx;
-          free.y = from.y;
+          free.y = from.y + dy;
           free.vy = 6;
           free.ph = Math.random() * 6.28;
           free.rot = Math.random() * 360;
@@ -479,8 +480,13 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
       bounds.left = box.left;
       bounds.right = box.left + box.width;
       // 벽을 화면 끝 바로 밖에 댄다 — 잘린 끝이 화면 밖에 숨는다.
-      dx = treeShift(bounds.right);
-      tree.setAttribute("transform", `translate(${dx.toFixed(1)},0)`);
+      const place = treePlace(bounds.right, box.top);
+      dx = place.dx;
+      dy = place.dy;
+      tree.setAttribute(
+        "transform",
+        `translate(${dx.toFixed(1)},${dy.toFixed(1)})`,
+      );
     },
 
     render(clock, dt, wind, dir) {

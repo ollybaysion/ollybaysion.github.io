@@ -18,7 +18,16 @@ const { title, description, image = FallbackImage } = Astro.props;
 
 <!-- Global Metadata -->
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+{/*
+  interactive-widget=resizes-content — 자판이 올라오면 화면(레이아웃 뷰포트)도 함께
+  줄어든다. 기본값(resizes-visual)에서는 화면 크기가 그대로라 무대가 아무것도 모른 채
+  서 있고, 자판이 CLI 줄을 덮은 자리에 그대로 있다. 줄어들면 layout()이 다시 잘라
+  ❯ 줄이 자판 위로 올라온다.
+*/}
+<meta
+	name="viewport"
+	content="width=device-width,initial-scale=1,interactive-widget=resizes-content"
+/>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <link rel="icon" href="/favicon.ico" />
 <link rel="sitemap" href="/sitemap-index.xml" />

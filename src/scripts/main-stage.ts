@@ -8,7 +8,7 @@
  *        다른 지점 클릭 = 리로드, 내리기 = 닫기.
  * CLI = 데모. 명령 체계가 미확정이라 입력 확인 모달까지만 간다.
  */
-import { treeShift } from "../lib/stage/flower.ts";
+import { treePlace } from "../lib/stage/flower.ts";
 import {
   angleColor,
   angleColorWashed,
@@ -210,6 +210,10 @@ function start(svg: SVGSVGElement): void {
   );
   const cliText = svg.querySelector<SVGTextElement>("#cli-text")!;
   const cliCaret = svg.querySelector<SVGRectElement>("#cli-caret")!;
+  /** CLI의 진짜 입력칸 — 폰에서 자판을 부르는 유일한 손잡이다(MainStage.astro). */
+  const cliInput = document.querySelector<HTMLInputElement>("#cli-input");
+  /** 제사 — 손가락 화면에서는 눌러서 편다. */
+  const epigraph = svg.querySelector<SVGGElement>(".epigraph");
   const modal = svg.querySelector<SVGGElement>("#modal")!;
   const modalCmd = svg.querySelector<SVGTextElement>("#m-cmd")!;
 
@@ -236,12 +240,9 @@ function start(svg: SVGSVGElement): void {
     colL: EDGE,
     colR: VIEW_W - EDGE,
   };
-  /** 초상이 물러난 화면인가 — 물러났으면 매 프레임 흔들 것도 없다. */
-  let flowerOff = false;
   /** 낮은 창에서 파도 목록이 올라앉는 폭(음수). 정본 높이가 나오는 화면에서는 0이다. */
   let panelLift = 0;
 
-  const flowerG = svg.querySelector<SVGGElement>("#flower");
   const bleeds = [...svg.querySelectorAll<SVGLineElement>(".bleed")];
   const covers = [...svg.querySelectorAll<SVGRectElement>(".cover")];
   const bands = [...svg.querySelectorAll<SVGLineElement>(".band")];
@@ -317,11 +318,13 @@ function start(svg: SVGSVGElement): void {
     });
 
     // 배롱나무 — 가지 길이는 정본 그대로 두고, 벽이 화면 끝에 오도록 그루째 옮긴다.
-    flower?.resize({ left, width: w });
-    // 표찰은 제 나무를 따라간다 — 그루와 같은 거리다.
+    // 잘라 확대한 무대에서는 빛구멍 옆에 설 자리가 없어 하늘로 올라간다(treePlace).
+    flower?.resize({ left, width: w, top: view.minY });
+    // 표찰은 제 나무를 따라간다 — 그루와 같은 자리다.
+    const place = treePlace(right, view.minY);
     treeLabel?.setAttribute(
       "transform",
-      `translate(${treeShift(right).toFixed(1)},0)`,
+      `translate(${place.dx.toFixed(1)},${place.dy.toFixed(1)})`,
     );
 
     // CLI ❯와 입력은 화면 왼쪽 끝에 붙는다. 파도 목록 행은 가운데 열에 그대로 남는다.
@@ -346,7 +349,6 @@ function start(svg: SVGSVGElement): void {
     for (const el of retreating) {
       el.classList.toggle("is-hidden", w < Number(el.dataset.minW));
     }
-    flowerOff = flowerG?.classList.contains("is-hidden") ?? false;
 
     /*
       파도 목록의 열 — 화면 안쪽으로 당긴다.
@@ -458,6 +460,7 @@ function start(svg: SVGSVGElement): void {
     const typed = command.trim();
     if (!typed) return;
     command = "";
+    if (cliInput) cliInput.value = "";
 
     const route = ROUTES[typed.replace(/^\//, "").toLowerCase()];
     if (route) {
@@ -493,6 +496,33 @@ function start(svg: SVGSVGElement): void {
     if (modalState.open) {
       modalState.open = false;
       return;
+    }
+
+    /*
+      손가락 화면에서 제사는 눌러서 편다 — 올릴 손이 없는 화면에서는 누르는 것이 호버다.
+      한 번 누르면 뜻과 주석이 펴지고, 다시 누르거나 무대 아무 데나 누르면 접힌다.
+    */
+    if (TOUCH && epigraph) {
+      if ((e.target as Element | null)?.closest?.(".epigraph")) {
+        epigraph.classList.toggle("is-open");
+        return;
+      }
+      epigraph.classList.remove("is-open");
+    }
+
+    /*
+      CLI 줄을 누르면 진짜 입력칸에 손을 얹는다 — 폰에서 자판이 올라오는 유일한 길이다.
+      데스크톱에서는 이미 화면 전체가 키를 받고 있으니 포커스만 옮겨 갈 뿐 달라질 게 없다.
+      줄에서 손을 떼면(다른 자리를 누르면) 자판도 함께 내려간다.
+    */
+    const onCli = point.y >= CLI_TOP && point.y <= CLI_BOTTOM;
+    if (onCli && cliInput) {
+      // 눌린 자리가 무대라 브라우저는 곧 포커스를 무대로 옮긴다 — 그 기본 동작을
+      // 막아야 방금 얹은 손이 떨어지지 않는다(줄 위에는 누를 링크가 없다).
+      e.preventDefault();
+      cliInput.focus();
+    } else if (cliInput && document.activeElement === cliInput) {
+      cliInput.blur();
     }
 
     // 명함과 표찰은 읽는 것이지 누르는 것이 아니다 — 눌러도 아무 일도 없다.
@@ -731,7 +761,7 @@ function start(svg: SVGSVGElement): void {
     if (seaScene && !seaScene.reduceMotion) {
       const frame = seaScene.render(now);
       // 꽃은 바다와 같은 바람 하나를 받는다 — 세기도 방향도 한 하늘에서 나온다.
-      if (!flowerOff) flower?.render(now, dt, frame.wind, frame.dir);
+      flower?.render(now, dt, frame.wind, frame.dir);
     }
 
     const ps = panelState;
@@ -788,9 +818,14 @@ function start(svg: SVGSVGElement): void {
     cliCaret.setAttribute("x", (EDGE + 24 + width2 + 2).toFixed(1));
     const nearCli =
       target.over && target.y > CLI_TOP - 14 && target.y < CLI_BOTTOM + 14;
+    // 손가락 화면에서는 자판이 올라와 있는 동안이 곧 "줄 위에 손이 있는" 때다.
+    const typing = cliInput !== null && document.activeElement === cliInput;
     cliCaret.setAttribute(
       "opacity",
-      ((nearCli || command) && Math.sin(now * 5.2) > -0.2 ? 0.7 : 0).toFixed(2),
+      ((nearCli || typing || command) && Math.sin(now * 5.2) > -0.2
+        ? 0.7
+        : 0
+      ).toFixed(2),
     );
 
     modalState.op +=
@@ -813,6 +848,28 @@ function start(svg: SVGSVGElement): void {
       lastT = 0;
       tick();
     }
+  }
+
+  /*
+    입력칸에 찍힌 글자를 ❯ 줄로 옮긴다. 자판이 자기 방식대로 고쳐 쓰는 말(한글 조합·
+    자동 완성)도 여기서는 결과만 받으면 된다 — 그래서 키가 아니라 값을 본다.
+  */
+  if (cliInput) {
+    cliInput.addEventListener("input", () => {
+      command = cliInput.value.slice(0, 40);
+    });
+    cliInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        execCommand();
+        e.preventDefault();
+        return;
+      }
+      if (e.key === "Escape") {
+        command = "";
+        cliInput.value = "";
+        cliInput.blur();
+      }
+    });
   }
 
   layout();

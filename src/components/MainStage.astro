@@ -16,7 +16,7 @@ import postsData from '../data/generated/posts.json';
 import seriesData from '../data/generated/series.json';
 import { meanAngle } from '../lib/coords/arc.ts';
 import { RADIUS_MAX } from '../lib/coords/constants.ts';
-import { BUDS, FX, WALL, WALL_GAP } from '../lib/stage/flower.ts';
+import { FX, WALL, WALL_GAP } from '../lib/stage/flower.ts';
 import { LABEL_GAP, labelPlacement } from '../lib/stage/label.ts';
 import { EDGE_L as EDGE } from '../lib/stage/list.ts';
 import { angleColor } from '../lib/stage/palette.ts';
@@ -284,15 +284,6 @@ const TREE_MIN_W = Math.ceil(
 );
 
 /**
- * 초상이 서려면 화면이 얼마나 넓어야 하는가 — **제 몸이 잘리지 않을 때까지만.**
- *
- * 그루는 화면 오른쪽 끝(350 + w/2)에 매달려 있으니 폭이 줄면 화면이 꽃 위로 닫힌다.
- * 초상의 오른쪽 끝은 봉오리 구슬 바깥이다(구슬 반지름 7.5에 붓 두께 몫). 잘라 확대한
- * 폰에서는 이 선을 넘어 반쪽 꽃이 남으니, 그럴 바엔 통째로 물러난다 — 낙화도 함께.
- */
-const FLOWER_MIN_W = Math.ceil(2 * (Math.max(...BUDS.map(([x]) => x)) + 8 - 350));
-
-/**
  * 목록 화면이 있는 카테고리.
  *
  * 등록부에는 호가 있어도 글이 한 편도 없으면 `/list/{이름}/` 길이 나지 않는다
@@ -402,7 +393,7 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		  같은 바람 하나를 받는다. 자리와 흔들림은 flower-scene.ts가 잡는다.
 		  글 점 아래에 둔다 — 무대의 주인은 글이다. 손도 타지 않게 비켜선다.
 		*/}
-		<g id="flower" data-flower data-min-w={FLOWER_MIN_W} pointer-events="none"></g>
+		<g id="flower" data-flower pointer-events="none"></g>
 
 		{/*
 		  배롱나무 표찰 — 초상 아래. 그루와 같은 거리만큼 옮겨 앉고(layout),
@@ -596,7 +587,7 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		</g>
 
 		{/* 낙화와 파문 — 물 위에서 벌어지니 바다·윤슬보다 위에 있어야 한다. */}
-		<g id="petals" data-petals data-min-w={FLOWER_MIN_W} pointer-events="none"></g>
+		<g id="petals" data-petals pointer-events="none"></g>
 
 		<g id="panel" opacity="0" transform="translate(0,290)">
 			<path id="p-wavefill" d="M0,790 L0,536 L700,536 L700,790 Z" fill="#131316" opacity="0.97"></path>
@@ -791,7 +782,8 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 				stroke-opacity="0.5"></rect>
 			<text id="m-cmd" x="170" y="376" class="mono" font-size="14" fill="#e8e6e1"></text>
 			<text x="170" y="408" font-size="12.5" fill="#8f8c85">아직 아무 데도 연결되지 않은 입력이에요</text>
-			<text x="170" y="440" font-size="11" fill="#8f8c85" opacity="0.7">아무 곳이나 클릭해 닫기</text>
+			{/* 손가락 화면에도 나오는 글이라 "클릭"이 아니라 누르는 말로 적는다. */}
+			<text x="170" y="440" font-size="11" fill="#8f8c85" opacity="0.7">아무 데나 눌러 닫기</text>
 		</g>
 
 		<rect class="cover" fill="url(#hvig)" pointer-events="none"></rect>
@@ -811,6 +803,25 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 			opacity="0.056"
 			pointer-events="none"></line>
 	</svg>
+
+	{/*
+	  CLI의 진짜 입력칸 — 눈에는 없고 손가락에만 있다.
+
+	  무대의 ❯ 줄은 SVG 글자라 자판을 부르지 못한다. 데스크톱은 화면 어디서 친 키든
+	  무대가 받지만(document keydown), 폰에는 칠 키가 없다 — 그래서 줄을 누르면
+	  여기에 손이 얹히고(focus) 운영체제 자판이 올라온다. 찍히는 글자는 그대로 ❯ 줄이다.
+	*/}
+	<input
+		id="cli-input"
+		type="text"
+		maxlength="40"
+		autocomplete="off"
+		autocorrect="off"
+		autocapitalize="off"
+		spellcheck="false"
+		tabindex="-1"
+		aria-label="명령 입력"
+	/>
 
 	<nav class="stage-index" aria-label="글 목록">
 		<h2>글</h2>
@@ -842,8 +853,31 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 	  실제 viewBox와 가로 요소의 폭은 main-stage.ts의 layout()이 잡는다.
 	*/
 	.stage {
+		position: relative;
 		width: 100vw;
 		height: 100dvh;
+	}
+
+	/*
+	  자리는 CLI 줄 언저리다 — 보이지 않아도 자판이 올라올 때 화면이 이 자리를 기준으로
+	  움직인다. 손은 받지 않는다(pointer-events: none): 누르는 판은 무대가 맡고
+	  여기는 눌린 **뒤에** focus()로 불려 온다. 탭 순서에서도 빠진다 — 보이지 않는 칸에
+	  커서가 들어가면 데스크톱에서 무대가 키를 놓친다.
+	*/
+	#cli-input {
+		position: absolute;
+		left: 0;
+		top: 58%;
+		width: 60%;
+		height: 44px;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: transparent;
+		caret-color: transparent;
+		font: inherit;
+		opacity: 0;
+		pointer-events: none;
 	}
 
 	#hoverscene {
@@ -878,15 +912,6 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		pointer-events: none;
 	}
 
-	/*
-	  초상은 물러날 때 통째로 사라진다 — 다른 조각들처럼 흐리게만 두면 화면 끝에
-	  잘린 가지가 유령으로 남고, 보이지도 않는 꽃이 매 프레임 흔들린다.
-	*/
-	#flower.is-hidden,
-	#petals.is-hidden {
-		display: none;
-	}
-
 	/* 점이 커서 밑에 오면 누를 수 있다는 뜻이다(main-stage.ts가 붙인다). */
 	#hoverscene.on-post {
 		cursor: pointer;
@@ -917,6 +942,30 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 	.epigraph:hover .epigraph-note:not(.is-hidden),
 	.epigraph:hover .epigraph-essay:not(.is-hidden) {
 		opacity: 1;
+	}
+
+	/*
+	  손가락 화면 — 올릴 손이 없으니 **눌러서 편다**(is-open은 main-stage.ts가 붙인다.
+	  손가락 화면에서만 붙으니 마우스 쪽 문법은 그대로다).
+
+	  폭 때문에 물러난 뜻·주석도 이때는 펴진다: 물러난 이유가 "옆에 놓을 자리가 없다"인데
+	  손이 직접 그 자리를 부른 것이라 이유가 사라진다. 다만 풀이는 물러난 자리에서
+	  빛구멍을 덮으니 제 폭이 나올 때만 선다 — 폰에서 제사는 주석 한 줄까지다.
+	*/
+	.epigraph.is-open #tagline-gloss,
+	.epigraph.is-open .epigraph-note,
+	.epigraph.is-open .epigraph-essay:not(.is-hidden) {
+		opacity: 1;
+	}
+
+	#sitename:has(.epigraph.is-open) ~ #social {
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	#sitename:has(.epigraph.is-open .epigraph-essay:not(.is-hidden)) ~ #alumni-col {
+		opacity: 0;
+		pointer-events: none;
 	}
 
 	/*
