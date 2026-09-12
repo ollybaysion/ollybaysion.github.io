@@ -1,0 +1,494 @@
+/*
+  스킬 카드 지도 — 글 한 편 전용 스타일.
+  본문 `.body`(700 기둥, 안쪽 596) 안에서만 살고, 무대 팔레트(--stage-*)를 그대로 쓴다.
+  모든 선택자는 `.skillmap` 아래로 묶어 사이트에 새지 않게 한다.
+  본문에 CSS를 직접 넣지 않는 이유: plainText()가 <style> 안 글자를 임베딩에 넣는다.
+*/
+@import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+
+.skillmap {
+	--sm-ink: var(--stage-ink, #e8e6e1);
+	--sm-ink-2: var(--stage-ink-dim, #d8d5cd);
+	--sm-muted: var(--stage-muted, #8f8c85);
+	--sm-rule: var(--stage-rule, #2a2a2e);
+	--sm-card: #1c1c21;
+	--sm-card-line: #2e2e34;
+	--sm-code: #17171b;
+	--sm-sky: #6fb6ff;
+	--sm-sky-soft: #1e3a5c;
+	--sm-sun: #ffd84d;
+	--sm-sun-soft: #4a3f14;
+	--sm-coral: #ff7e6c;
+	--sm-coral-soft: #4e2a24;
+	--sm-leaf: #5cd49e;
+	--sm-leaf-soft: #1c4534;
+	--sm-grape: #b08fff;
+	--sm-grape-soft: #33285a;
+	--sm-display: 'Jua', var(--stage-sans, 'Noto Sans KR', sans-serif);
+	--sm-mono: var(--stage-mono, 'JetBrains Mono', ui-monospace, monospace);
+	/* 본문의 인라인 SVG가 쓰는 짧은 이름. .skillmap 안에서만 산다 — 밖으로 새지 않는다. */
+	--ink: var(--sm-ink);
+	--muted: var(--sm-muted);
+	--line: var(--sm-rule);
+	--paper: var(--sm-card);
+	--card: var(--sm-card);
+	--card-line: var(--sm-card-line);
+	--sky: var(--sm-sky);
+	--sky-soft: var(--sm-sky-soft);
+	--sun: var(--sm-sun);
+	--sun-soft: var(--sm-sun-soft);
+	--coral: var(--sm-coral);
+	--coral-soft: var(--sm-coral-soft);
+	--leaf: var(--sm-leaf);
+	--leaf-soft: var(--sm-leaf-soft);
+	--grape: var(--sm-grape);
+	--grape-soft: var(--sm-grape-soft);
+	color: var(--sm-ink-2);
+	line-height: 1.6;
+}
+
+/* 본문 기본 여백을 끈다 — 간격은 gap으로만 잡는다. */
+.skillmap .txt p,
+.skillmap .kard p,
+.skillmap .hero p,
+.skillmap .foot,
+.skillmap .door p {
+	margin: 0;
+}
+
+.skillmap .hd,
+.skillmap .hd3,
+.skillmap .q {
+	font-family: var(--sm-display);
+	font-weight: 400;
+	margin: 0;
+	line-height: 1.15;
+	text-wrap: balance;
+	color: var(--sm-ink);
+}
+.skillmap .hd {
+	font-size: 30px;
+}
+.skillmap .hd3 {
+	font-size: 20px;
+	margin-top: 24px;
+}
+.skillmap .q {
+	font-size: 15px;
+	color: var(--sm-coral);
+	letter-spacing: 0.02em;
+}
+.skillmap .big {
+	font-size: 18px;
+	font-weight: 500;
+	color: var(--sm-ink);
+	text-wrap: balance;
+}
+.skillmap .small {
+	font-size: 14px;
+	color: var(--sm-muted);
+}
+.skillmap .big b,
+.skillmap .small b {
+	color: var(--sm-ink);
+	font-weight: 700;
+}
+
+/* 머리 */
+.skillmap .hero {
+	display: grid;
+	gap: 10px;
+	padding-bottom: 20px;
+}
+.skillmap .hero .date {
+	font-size: 13px;
+	color: var(--sm-muted);
+}
+
+/* 차례 + 찾기 */
+.skillmap .bar {
+	display: grid;
+	gap: 10px;
+	padding: 12px 0;
+	border-top: 3px dashed var(--sm-rule);
+	border-bottom: 3px dashed var(--sm-rule);
+}
+.skillmap .nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.skillmap .nav a {
+	font-family: var(--sm-display);
+	font-size: 14px;
+	padding: 3px 11px;
+	border-radius: 999px;
+	background: var(--sm-card);
+	border: 2px solid var(--sm-card-line);
+	color: var(--sm-ink-2);
+	text-decoration: none;
+}
+.skillmap .nav a:hover,
+.skillmap .nav a:focus-visible {
+	border-color: var(--sm-coral);
+	color: var(--sm-coral);
+	outline: none;
+}
+.skillmap .filter {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.skillmap .filter input {
+	flex: 1 1 200px;
+	min-width: 0;
+	font: inherit;
+	font-family: var(--stage-sans, sans-serif);
+	font-size: 14px;
+	padding: 7px 14px;
+	border: 2px solid var(--sm-card-line);
+	border-radius: 999px;
+	background: var(--sm-card);
+	color: var(--sm-ink);
+}
+.skillmap .filter input:focus-visible {
+	outline: none;
+	border-color: var(--sm-sky);
+}
+.skillmap .filter .count {
+	font-family: var(--sm-display);
+	font-size: 14px;
+	color: var(--sm-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+/* 장면: 그림 위, 글 아래 (596 기둥이라 한 단) */
+.skillmap section {
+	border-top: 3px dashed var(--sm-rule);
+	margin-top: 8px;
+}
+.skillmap section.hide {
+	display: none;
+}
+.skillmap .scene {
+	display: grid;
+	gap: 16px;
+	padding: 32px 0 12px;
+}
+.skillmap .scene .txt {
+	display: grid;
+	gap: 8px;
+}
+.skillmap .pic svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	color: var(--sm-ink);
+	font-family: var(--sm-display);
+	border: 0;
+	border-radius: 0;
+}
+
+/* 카드 덱 */
+.skillmap .deck {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	gap: 14px;
+	margin: 16px 0 28px;
+}
+.skillmap .kard {
+	background: var(--sm-card);
+	border: 3px solid var(--sm-card-line);
+	border-radius: 16px;
+	padding: 18px 14px 12px;
+	box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+	display: grid;
+	gap: 7px;
+	position: relative;
+	align-content: start;
+}
+.skillmap .kard.hide {
+	display: none;
+}
+.skillmap .kard .who {
+	font-family: var(--sm-display);
+	font-size: 20px;
+	line-height: 1.15;
+	color: var(--sm-ink);
+	padding-right: 8px;
+}
+.skillmap .kard .say {
+	font-size: 14px;
+	color: var(--sm-ink-2);
+	line-height: 1.6;
+}
+.skillmap .kard .say .cmd {
+	font-size: 12px;
+}
+.skillmap .kard .meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 10px;
+	align-items: center;
+	margin-top: 2px;
+}
+.skillmap .kard .star {
+	font-family: var(--sm-display);
+	font-size: 17px;
+	color: #1b1d22;
+	background: var(--sm-sun);
+	border-radius: 999px;
+	padding: 1px 11px;
+	white-space: nowrap;
+}
+.skillmap .kard .star::before {
+	content: '★ ';
+}
+.skillmap .kard .star.na {
+	background: var(--sm-rule);
+	color: var(--sm-muted);
+}
+.skillmap .kard .star.na::before {
+	content: '';
+}
+.skillmap .kard .n {
+	font-size: 12px;
+	color: var(--sm-muted);
+	font-family: var(--sm-mono);
+}
+.skillmap .kard .rep {
+	font-family: var(--sm-mono);
+	font-size: 11.5px;
+	color: var(--sm-muted);
+	word-break: break-all;
+}
+.skillmap .kard .list {
+	font-size: 12px;
+	color: var(--sm-muted);
+	line-height: 1.5;
+}
+.skillmap .kard .tag {
+	position: absolute;
+	top: -13px;
+	left: 12px;
+	font-family: var(--sm-display);
+	font-size: 12.5px;
+	border-radius: 999px;
+	padding: 2px 10px;
+	color: #1b1d22;
+}
+.skillmap .kard .pin {
+	position: absolute;
+	top: -13px;
+	right: 10px;
+	display: flex;
+	gap: 4px;
+}
+.skillmap .kard .pin span {
+	font-size: 11px;
+	font-weight: 700;
+	border-radius: 999px;
+	padding: 2px 8px;
+	background: var(--sm-leaf);
+	color: #0f2a1d;
+}
+.skillmap .kard .pin span.c {
+	background: var(--sm-grape);
+	color: #fff;
+}
+.skillmap .k-sky {
+	border-color: var(--sm-sky);
+}
+.skillmap .k-sky .tag {
+	background: var(--sm-sky);
+}
+.skillmap .k-coral {
+	border-color: var(--sm-coral);
+}
+.skillmap .k-coral .tag {
+	background: var(--sm-coral);
+}
+.skillmap .k-grape {
+	border-color: var(--sm-grape);
+}
+.skillmap .k-grape .tag {
+	background: var(--sm-grape);
+	color: #fff;
+}
+.skillmap .k-leaf {
+	border-color: var(--sm-leaf);
+}
+.skillmap .k-leaf .tag {
+	background: var(--sm-leaf);
+}
+.skillmap .k-sun {
+	border-color: var(--sm-sun);
+}
+.skillmap .k-sun .tag {
+	background: var(--sm-sun);
+}
+.skillmap .kard.wide {
+	grid-column: 1 / -1;
+}
+
+/* 설치 명령 — 무대의 `.body :not(pre) > code`보다 특이도를 높여 둔다. */
+.skillmap .kard .cmd,
+.skillmap .door .cmd,
+.skillmap .foot .cmd {
+	display: block;
+	font-family: var(--sm-mono);
+	font-size: 11.5px;
+	line-height: 1.5;
+	background: var(--sm-code);
+	border: 1px solid var(--sm-card-line);
+	border-radius: 6px;
+	padding: 4px 8px;
+	color: var(--sm-ink-2);
+	white-space: normal;
+	word-break: break-all;
+}
+.skillmap .foot .cmd,
+.skillmap .kard .say .cmd {
+	display: inline;
+	padding: 1px 5px;
+}
+
+/* 구글 칩 */
+.skillmap .chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 4px;
+}
+.skillmap .chips span {
+	font-size: 12px;
+	background: var(--sm-sky-soft);
+	color: var(--sm-ink-2);
+	border-radius: 999px;
+	padding: 2px 10px;
+}
+.skillmap .chips span b {
+	color: var(--sm-ink);
+}
+
+/* 문 세 개 */
+.skillmap .doors {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 12px;
+	margin: 16px 0 8px;
+}
+.skillmap .door {
+	display: grid;
+	gap: 8px;
+	justify-items: center;
+	text-align: center;
+}
+.skillmap .door .lab {
+	font-family: var(--sm-display);
+	font-size: 15px;
+	color: var(--sm-ink);
+}
+@media (max-width: 560px) {
+	.skillmap .doors {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* 설치 수 막대 */
+.skillmap .lb {
+	list-style: none;
+	margin: 14px 0 32px;
+	padding: 0;
+	display: grid;
+	gap: 8px;
+}
+.skillmap .lb li {
+	display: grid;
+	grid-template-columns: 140px 1fr 56px;
+	gap: 10px;
+	align-items: center;
+	font-size: 13px;
+	margin: 0;
+}
+.skillmap .lb .nm {
+	font-family: var(--sm-display);
+	font-size: 15px;
+	color: var(--sm-ink);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.skillmap .lb .nm small {
+	display: block;
+	font-family: var(--sm-mono);
+	font-size: 10.5px;
+	color: var(--sm-muted);
+}
+.skillmap .lb .track {
+	height: 16px;
+	background: var(--sm-rule);
+	border-radius: 8px;
+	overflow: hidden;
+}
+.skillmap .lb .fill {
+	display: block;
+	height: 100%;
+	background: var(--sm-sky);
+	border-radius: 8px;
+}
+.skillmap .lb .v {
+	font-family: var(--sm-display);
+	text-align: right;
+	color: var(--sm-ink);
+	font-variant-numeric: tabular-nums;
+}
+.skillmap .f100 { width: 100%; }
+.skillmap .f32 { width: 32%; }
+.skillmap .f26 { width: 26%; }
+.skillmap .f25 { width: 25%; }
+.skillmap .f24 { width: 24%; }
+.skillmap .f16 { width: 16%; }
+.skillmap .f15 { width: 15%; }
+
+/* 요약 */
+.skillmap .sum {
+	background: var(--sm-sun-soft);
+	border-radius: 20px;
+	padding: 22px 22px;
+	display: grid;
+	gap: 8px;
+	margin-top: 8px;
+}
+.skillmap .sum .hd {
+	font-size: 24px;
+}
+.skillmap .sum ol {
+	margin: 0;
+	padding-left: 1.3em;
+	font-size: 15px;
+	display: grid;
+	gap: 6px;
+	color: var(--sm-ink-2);
+}
+.skillmap .sum li {
+	margin: 0;
+}
+.skillmap .sum b {
+	color: var(--sm-ink);
+}
+.skillmap .foot {
+	margin-top: 22px;
+	font-size: 12.5px;
+	color: var(--sm-muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.skillmap .kard {
+		transition: transform 0.15s;
+	}
+	.skillmap .kard:hover {
+		transform: translateY(-3px);
+	}
+}
