@@ -1,6 +1,6 @@
 /* 스킬 카드 지도 — 카드 찾기. 본문 .md에 JS를 직접 넣지 않는다(plainText()가 임베딩에 넣는다). */
 (function () {
-	var root = document.querySelector('.skillmap');
+	var root = document.getElementById('skillmap');
 	if (!root) return;
 	var q = root.querySelector('#skillmap-q');
 	var count = root.querySelector('#skillmap-count');
