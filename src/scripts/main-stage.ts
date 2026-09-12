@@ -117,10 +117,26 @@ const DOT_REST = 0.5;
 interface Post {
   angle: number;
   slug: string;
+  title: string;
+  /** YYYY-MM-DD. 은하수 목록의 오른쪽 칸에 적힌다. */
+  date: string;
   category: string;
   x: number;
   y: number;
   dot: SVGCircleElement;
+  /** 은하수에 든 별은 제 이름표가 없다(MainStage). */
+  label: SVGTextElement | null;
+  /** 은하수 구성원이면 그 은하수. 누르면 글이 아니라 목록이 열린다. */
+  galaxy: Galaxy | null;
+  /** 이번 프레임의 밝기 — 은하수가 구성원 중 가장 밝은 값을 받는다. */
+  glow: number;
+}
+
+/** 은하수 — 눈이 못 가르게 붙은 별들. 안개 하나, 이름표 하나(galaxy.ts). */
+interface Galaxy {
+  name: string;
+  members: Post[];
+  haze: SVGCircleElement;
   label: SVGTextElement;
 }
 
@@ -170,14 +186,34 @@ function start(svg: SVGSVGElement): void {
       return {
         angle,
         slug: g.dataset.slug ?? "",
+        title: g.dataset.title ?? "",
+        date: g.dataset.date ?? "",
         category: g.dataset.category ?? "",
         x: CX + radius * Math.cos(a),
         y: CY + radius * Math.sin(a),
         dot: g.querySelector("circle")!,
-        label: g.querySelector("text")!,
+        label: g.querySelector("text"),
+        galaxy: null,
+        glow: 0,
       };
     },
   );
+  const postBySlug = new Map(posts.map((post) => [post.slug, post]));
+  const galaxies: Galaxy[] = [
+    ...svg.querySelectorAll<SVGGElement>(".galaxy"),
+  ].map((g) => {
+    const galaxy: Galaxy = {
+      name: g.dataset.name ?? "",
+      members: (g.dataset.slugs ?? "")
+        .split(",")
+        .map((slug) => postBySlug.get(slug))
+        .filter((post): post is Post => post !== undefined),
+      haze: g.querySelector("circle")!,
+      label: g.querySelector("text")!,
+    };
+    for (const member of galaxy.members) member.galaxy = galaxy;
+    return galaxy;
+  });
 
   const beam = svg.querySelector<SVGPathElement>("#beam")!;
   const beamStops = [...svg.querySelectorAll<SVGStopElement>("#beamgrad stop")];
@@ -400,19 +436,16 @@ function start(svg: SVGSVGElement): void {
     };
   }
 
-  function openPanel(x: number, y: number): void {
-    const sorted = posts
-      .map((post) => {
-        const d = Math.hypot(x - post.x, y - post.y);
-        return { post, d, proximity: Math.max(0, 1 - d / dMax) };
-      })
-      .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug));
+  /** 파도 목록의 머리와 행을 채운다. `note`는 행 오른쪽 끝의 작은 글자(근접도·날짜). */
+  function fillPanel(
+    name: string,
+    entries: ReadonlyArray<{ post: Post; note: string }>,
+    x: number,
+    y: number,
+  ): void {
+    const category = nearestCategory(angleAt(x, y));
 
-    let angle = (Math.atan2(y - CY, x - CX) * 180) / Math.PI;
-    if (angle < 0) angle += 360;
-    const category = nearestCategory(angle);
-
-    pName.textContent = category;
+    pName.textContent = name;
     // 글이 없는 카테고리는 목록 화면이 없다 — 없는 길로 보내는 대신 그렇다고 적는다.
     if (listed.has(category)) {
       pMoreText.textContent = "목록 자세히 →";
@@ -426,7 +459,7 @@ function start(svg: SVGSVGElement): void {
     }
 
     rows.forEach((row, i) => {
-      const entry = sorted[i];
+      const entry = entries[i];
       if (!entry) {
         row.link.removeAttribute("href");
         row.dot.setAttribute("opacity", "0");
@@ -440,11 +473,45 @@ function start(svg: SVGSVGElement): void {
         entry.post.dot.getAttribute("fill") ?? "#8f8c85",
       );
       row.dot.setAttribute("opacity", "1");
-      row.title.textContent = entry.post.label.textContent;
+      row.title.textContent = entry.post.title;
       row.title.setAttribute("opacity", "1");
-      row.distance.textContent = `${Math.round(entry.proximity * 100)}%`;
+      row.distance.textContent = entry.note;
       row.distance.setAttribute("opacity", "0.8");
     });
+  }
+
+  /** 빈 자리를 눌렀을 때 — 그 지점에서 가까운 글 순. */
+  function openPanel(x: number, y: number): void {
+    const sorted = posts
+      .map((post) => {
+        const d = Math.hypot(x - post.x, y - post.y);
+        return { post, d, proximity: Math.max(0, 1 - d / dMax) };
+      })
+      .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug))
+      .map(({ post, proximity }) => ({
+        post,
+        note: `${Math.round(proximity * 100)}%`,
+      }));
+    fillPanel(nearestCategory(angleAt(x, y)), sorted, x, y);
+  }
+
+  /**
+   * 은하수를 눌렀을 때 — 그 안의 별들, 새 글부터. 전부 한자리라 근접도는 뜻이 없고,
+   * 대신 발행일을 적는다.
+   */
+  function openGalaxy(galaxy: Galaxy, x: number, y: number): void {
+    fillPanel(
+      galaxy.name,
+      galaxy.members.map((post) => ({ post, note: post.date })),
+      x,
+      y,
+    );
+  }
+
+  function angleAt(x: number, y: number): number {
+    let angle = (Math.atan2(y - CY, x - CX) * 180) / Math.PI;
+    if (angle < 0) angle += 360;
+    return angle;
   }
 
   /**
@@ -560,7 +627,8 @@ function start(svg: SVGSVGElement): void {
       return;
     }
 
-    // 점을 누르면 그 글로 바로 간다. 빈 자리를 눌렀을 때만 목록이 올라온다.
+    // 점을 누르면 그 글로 바로 간다. 은하수를 누르면 그 안의 별 목록이 올라온다 —
+    // 겹친 점 중 하나로 보내면 나머지는 영영 못 가는 글이 된다. 빈 자리는 가까운 글 순.
     const reach = e.pointerType === "touch" ? HIT_R_TOUCH : HIT_R;
     const hit = posts
       .map((post) => {
@@ -569,11 +637,16 @@ function start(svg: SVGSVGElement): void {
       })
       .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug))[0];
     if (hit && hit.d <= reach) {
-      location.href = `/blog/${hit.post.slug}/`;
-      return;
+      if (hit.post.galaxy) {
+        openGalaxy(hit.post.galaxy, point.x, point.y);
+      } else {
+        location.href = `/blog/${hit.post.slug}/`;
+        return;
+      }
+    } else {
+      openPanel(point.x, point.y);
     }
 
-    openPanel(point.x, point.y);
     if (panelState.open) {
       // 이미 올라와 있으면 그 지점 기준으로 내용만 갈아끼운다.
       panelState.pulse = 1;
@@ -728,16 +801,37 @@ function start(svg: SVGSVGElement): void {
           );
         }
       }
+      post.glow = glow;
       post.dot.setAttribute("cx", at.x.toFixed(1));
       post.dot.setAttribute("cy", at.y.toFixed(1));
       post.dot.setAttribute("r", (1.6 + 3.4 * glow).toFixed(2));
       post.dot.setAttribute("opacity", Math.min(1, glow * 1.15).toFixed(2));
-      post.label.setAttribute(
+      post.label?.setAttribute(
         "opacity",
         TOUCH ? "0" : Math.max(0, (glow - 0.4) * 1.9).toFixed(2),
       );
     }
     svg.classList.toggle("on-post", onPost);
+
+    // 은하수 — 가장 밝은 별만큼 밝고, 안개는 끌려온 별들의 한가운데를 따라간다.
+    for (const galaxy of galaxies) {
+      let glow = 0;
+      let sx = 0;
+      let sy = 0;
+      for (const member of galaxy.members) {
+        glow = Math.max(glow, member.glow);
+        sx += Number(member.dot.getAttribute("cx"));
+        sy += Number(member.dot.getAttribute("cy"));
+      }
+      const n = Math.max(1, galaxy.members.length);
+      galaxy.haze.setAttribute("cx", (sx / n).toFixed(1));
+      galaxy.haze.setAttribute("cy", (sy / n).toFixed(1));
+      galaxy.haze.setAttribute("opacity", (glow * 0.55).toFixed(2));
+      galaxy.label.setAttribute(
+        "opacity",
+        TOUCH ? "0" : Math.max(0, (glow - 0.4) * 1.9).toFixed(2),
+      );
+    }
 
     for (const stop of haloStops) stop.setAttribute("stop-color", color);
     for (const stop of bloomStops) stop.setAttribute("stop-color", color);
