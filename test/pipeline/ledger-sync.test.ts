@@ -21,7 +21,13 @@ describe('원장 ↔ 콘텐츠', () => {
 	it('글이 있으면 epoch가 잡혀 있다', () => {
 		if (posts.length > 0) {
 			assert.notEqual(ledger.epoch, null);
-			assert.equal(ledger.epoch, posts[0].date, 'epoch는 가장 이른 글의 발행일이어야 한다');
+			// epoch는 첫 글이 박힐 때 그 발행일로 잡히고 그 뒤로 안 움직인다(반지름의 눈금이라
+			// 옮기면 전량 재측량). 그 첫 글이 내려가도 epoch는 남는다 — 그래서 "같다"가 아니라
+			// "가장 이른 글보다 늦지 않다"까지만 약속한다.
+			assert.ok(
+				Date.parse(ledger.epoch) <= Date.parse(posts[0].date),
+				`epoch(${ledger.epoch})가 가장 이른 글(${posts[0].date})보다 늦다`,
+			);
 		}
 	});
 

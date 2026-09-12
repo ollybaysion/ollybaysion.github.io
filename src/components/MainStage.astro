@@ -17,6 +17,7 @@ import seriesData from '../data/generated/series.json';
 import { meanAngle } from '../lib/coords/arc.ts';
 import { RADIUS_MAX } from '../lib/coords/constants.ts';
 import { FX, WALL, WALL_GAP } from '../lib/stage/flower.ts';
+import { findGalaxies } from '../lib/stage/galaxy.ts';
 import { LABEL_GAP, labelPlacement } from '../lib/stage/label.ts';
 import { EDGE_L as EDGE } from '../lib/stage/list.ts';
 import { angleColor } from '../lib/stage/palette.ts';
@@ -28,6 +29,17 @@ const posts = postsData.posts.map((post) => ({
 	color: angleColor(post.angle),
 	label: labelPlacement(post.angle, post),
 }));
+
+/**
+ * 은하수 — 눈이 못 가르게 붙은 글들(galaxy.ts). 별마다 이름표를 달면 겹치니 은하수에
+ * 하나만 달고, 누르면 그 안의 별 목록이 올라온다. 구성원 점은 그대로 그린다 — 알갱이다.
+ */
+const galaxies = findGalaxies(posts).map((galaxy) => ({
+	...galaxy,
+	color: angleColor(galaxy.angle),
+	label: labelPlacement(galaxy.angle, galaxy),
+}));
+const inGalaxy = new Set(galaxies.flatMap((galaxy) => galaxy.stars.map((star) => star.slug)));
 
 const bySlug = new Map(posts.map((post) => [post.slug, post]));
 /** 시리즈 별자리 — 회차 순으로 이은 선. 멤버가 하나면 점 하나짜리 별자리다. */
@@ -444,6 +456,38 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 			</g>
 		</g>
 
+		{/* 은하수의 안개 — 구성원 점 밑에 깔린다. 자리는 끌려온 점들을 따라 스크립트가 옮긴다. */}
+		{
+			galaxies.map((galaxy) => (
+				<g
+					class="galaxy"
+					data-name={galaxy.name}
+					data-slugs={galaxy.stars.map((star) => star.slug).join(',')}
+				>
+					<circle
+						cx={galaxy.x.toFixed(1)}
+						cy={galaxy.y.toFixed(1)}
+						r="7"
+						fill={galaxy.color}
+						opacity="0"
+						filter="url(#soften)"
+					/>
+					<text
+						x={galaxy.label.x.toFixed(1)}
+						y={galaxy.label.y.toFixed(1)}
+						text-anchor={galaxy.label.anchor}
+						font-size="11.5"
+						fill="#cfccc4"
+						opacity="0">
+						{galaxy.name}
+						<tspan fill="#8f8c85" font-size="10">
+							{` · ${galaxy.stars.length}편`}
+						</tspan>
+					</text>
+				</g>
+			))
+		}
+
 		{
 			posts.map((post) => (
 				<g
@@ -452,17 +496,22 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 					data-r={post.radius}
 					data-slug={post.slug}
 					data-category={post.category}
+					data-title={post.title}
+					data-date={post.date.slice(0, 10)}
 				>
 					<circle cx={post.x.toFixed(1)} cy={post.y.toFixed(1)} r="1.6" fill={post.color} opacity="0" />
-					<text
-						x={post.label.x.toFixed(1)}
-						y={post.label.y.toFixed(1)}
-						text-anchor={post.label.anchor}
-						font-size="11.5"
-						fill="#cfccc4"
-						opacity="0">
-						{post.title}
-					</text>
+					{/* 은하수에 든 별은 제 이름표가 없다 — 은하수 것 하나로 읽힌다. */}
+					{!inGalaxy.has(post.slug) && (
+						<text
+							x={post.label.x.toFixed(1)}
+							y={post.label.y.toFixed(1)}
+							text-anchor={post.label.anchor}
+							font-size="11.5"
+							fill="#cfccc4"
+							opacity="0">
+							{post.title}
+						</text>
+					)}
 				</g>
 			))
 		}
