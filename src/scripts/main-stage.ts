@@ -229,9 +229,9 @@ function start(svg: SVGSVGElement): void {
   const sitename = svg.querySelector<SVGGElement>("#sitename")!;
   const social = svg.querySelector<SVGGElement>("#social")!;
   const alumniCol = svg.querySelector<SVGGElement>("#alumni-col");
-  /** 배롱나무 표찰 — 그루를 따라 옮겨 앉는다. */
+  /** 감나무 표찰 — 그루를 따라 옮겨 앉는다. */
   const treeLabel = svg.querySelector<SVGGElement>("#tree-label");
-  /** 좁아지면 물러나는 조각들 — 제사의 뜻풀이·풀이, 명함, 배롱나무 표찰. */
+  /** 좁아지면 물러나는 조각들 — 제사의 뜻풀이·풀이, 명함, 감나무 표찰. */
   const retreating = [...svg.querySelectorAll<SVGElement>("[data-min-w]")];
   const panel = svg.querySelector<SVGGElement>("#panel")!;
   const waveFill = svg.querySelector<SVGPathElement>("#p-wavefill")!;
@@ -353,7 +353,7 @@ function start(svg: SVGSVGElement): void {
       px: box.height / h,
     });
 
-    // 배롱나무 — 가지 길이는 정본 그대로 두고, 벽이 화면 끝에 오도록 그루째 옮긴다.
+    // 감나무 — 가지 길이는 정본 그대로 두고, 벽이 화면 끝에 오도록 그루째 옮긴다.
     // 잘라 확대한 무대에서는 빛구멍 옆에 설 자리가 없어 하늘로 올라간다(treePlace).
     flower?.resize({ left, width: w, top: view.minY });
     // 표찰은 제 나무를 따라간다 — 그루와 같은 자리다.
@@ -753,7 +753,7 @@ function start(svg: SVGSVGElement): void {
     const distance = Math.hypot(bdx, bdy);
     const theta = Math.atan2(bdy, bdx);
     /*
-      막은 가운데 영역에서만 산다. 프레임선 밖은 좌측 명함과 배롱나무 표찰의 자리라
+      막은 가운데 영역에서만 산다. 프레임선 밖은 좌측 명함과 감나무 표찰의 자리라
       거기까지 따라가면 읽는 글자 위로 빛이 덮인다. 선 앞에서 잦아든다 — CLI 줄 위에서
       잦아드는 것과 같은 문법이다.
     */
