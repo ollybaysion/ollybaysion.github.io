@@ -1,53 +1,58 @@
 /**
- * 배롱나무를 세우고 흔든다.
+ * 감나무를 세우고 흔든다.
  *
- * 붙일 자리는 `[data-flower]`(그루)와 `[data-petals]`(낙화·파문) 둘이다.
+ * 붙일 자리는 `[data-flower]`(그루)와 `[data-falls]`(지는 잎·파문) 둘이다.
  * 바다처럼 id가 아니라 `data-` 표시로 찾는다.
  *
- * **꽃은 바다와 같은 바람 하나를 받는다** — 세기도 방향도 `sea.draw`가 돌려주는
+ * **그루는 바다와 같은 바람 하나를 받는다** — 세기도 방향도 `sea.draw`가 돌려주는
  * 그 프레임의 값이다. 제 바람을 따로 지어내면 한 하늘에서 두 리듬이 분다.
  *
- * 그루는 벽에 박힌 뿌리 마디를 축으로 통째로 휘고, 잎은 그 위에 잔떨림을 얹는다.
- * 다 그려진 뒤부터 낙화가 시작되고, 꽃잎이 물에 닿는 자리에서 사라지며 파문만 남는다.
+ * 그루는 벽에 박힌 뿌리 마디를 축으로 통째로 휘고, 꺾인 마디와 잔가지가 그 위에 제 휨을
+ * 더 얹는다. 감은 꼭지를 축으로 추처럼 흔들린다. 다 그려진 뒤부터 잎이 지기 시작하고,
+ * 잎이 물에 닿는 자리에서 사라지며 파문만 남는다.
  *
- * 꽃잎은 그루와 함께 옮기지 않는다 — 떨어진 뒤엔 제 좌표로 살아야
+ * 지는 잎은 그루와 함께 옮기지 않는다 — 떨어진 뒤엔 제 좌표로 살아야
  * 화면 밖 판정과 파문 자리가 전폭 좌표 그대로다. 대신 지는 순간에만 이동량을 더한다.
  */
 import {
-  barkPath,
-  BLADE_DEGS,
-  branchPath,
-  BRANCH_TIP_X,
-  BRANCH_TIP_Y,
-  BRANCH_WALL_Y,
-  BUD_SPLIT,
-  BUDS,
-  crepeBlade,
-  CUP_BELL,
-  CUP_HORNS,
-  CUP_STEM,
-  FX,
-  FY,
-  HEAD_TILT,
-  HEAD_Y,
+  CALYX,
+  ELBOW,
+  FALL,
+  FALL_LEAF,
+  FRUIT,
+  FRUIT_FILL,
+  FRUIT_GLOSS,
+  FRUIT_GROOVES,
+  FRUIT_X,
+  FRUIT_Y,
   ink,
   LAND_SPAN,
   LAND_TOP,
-  PEDICELS,
-  PETAL,
-  PETAL_POOL,
+  LEAF_POOL,
+  leafDrop,
+  leafPath,
+  LEAVES,
+  leafVeins,
+  LIMB,
+  LIMB_BARK,
+  MOSS_LIMB,
+  MOSS_TRUNK,
   RIPPLE_POOL,
   SEED,
+  STALK,
+  STALK_PATH,
+  SWAY,
   treePlace,
+  TRUNK,
+  TRUNK_BARK,
+  TWIGS,
   WALL,
+  WALL_Y,
 } from "../lib/stage/flower.ts";
 import { clamp01, noise1, rng } from "../lib/stage/noise.ts";
 import { HORIZON_Y, SEA_DEPTH } from "../lib/stage/sea.ts";
 
 const NS = "http://www.w3.org/2000/svg";
-
-/** 꽃밥의 금 — 제 색이다. 수면에 비친 빛과 달리 광원을 따라가지 않는다. */
-const GOLD = "#d9a154";
 
 export interface FlowerScene {
   /** 모션 줄이기 화면인가 — 매 프레임 부를 필요가 없다는 뜻이다. */
@@ -87,7 +92,8 @@ interface Bloom {
   dur: number;
 }
 
-interface Petal {
+/** 지는 잎 한 장. */
+interface Falling {
   node: SVGPathElement;
   alive: boolean;
   x: number;
@@ -118,14 +124,14 @@ function el<K extends keyof SVGElementTagNameMap>(
 
 export function mountFlower(scope: ParentNode): FlowerScene | null {
   const tree = scope.querySelector<SVGGElement>("[data-flower]");
-  const petalLayer = scope.querySelector<SVGGElement>("[data-petals]");
-  if (!tree || !petalLayer) return null;
+  const fallLayer = scope.querySelector<SVGGElement>("[data-falls]");
+  if (!tree || !fallLayer) return null;
 
   const rand = rng(SEED);
   const joints: Joint[] = [];
   const strokes: Stroke[] = [];
   const blooms: Bloom[] = [];
-  /** 꽃잎이 떨어져 나오는 자리 — 원반 여섯 잎의 밑동. */
+  /** 잎이 떨어져 나오는 자리 — 남은 잎 셋의 잎몸. */
   const anchors: { x: number; y: number }[] = [];
 
   function joint(parent: SVGGElement, x: number, y: number, w: number, wf = 0): SVGGElement {
@@ -157,155 +163,92 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
     return g;
   }
 
-  /* 벽에 박힌 뿌리 마디 — 그루 전체가 이 점을 축으로 흔들린다. */
-  const wallJoint = joint(tree, WALL, BRANCH_WALL_Y, 0.14, 0.05);
-  stroke(wallJoint, branchPath(), 2.6, 0.62, 0);
-  stroke(wallJoint, barkPath(), 1.35, 0.3, 0.3);
-  for (const d of PEDICELS) stroke(wallJoint, d, 1.43, 0.5, 0.6);
-  const root = joint(wallJoint, FX, FY, 0.2, 0.3);
-
-  /* 꽃머리를 8° 뒤로 눕혀 가지의 흐름을 이어받는다. */
-  const head = el("g", { transform: `rotate(${HEAD_TILT} ${FX} ${HEAD_Y})` });
-  root.appendChild(head);
-
-  /* 원반 여섯 잎 — 발톱(가는 자루) 끝에 달려 부챗살로 벌어진다. */
-  BLADE_DEGS.forEach((deg0, i) => {
-    const deg = deg0 + (rand() - 0.5) * 9;
-    const rad = (deg * Math.PI) / 180;
-    const dist = 41 + rand() * 9;
-    const rr = (25 + rand() * 6) * (1 - (0.16 * Math.abs(deg0)) / 85);
-    const bx = FX + dist * Math.sin(rad);
-    const by = HEAD_Y - dist * Math.cos(rad) - 5;
-    const j = joint(head, bx, by, 0.02, 0.8);
-    const g = bloom(j, bx, by, i % 3);
-    const nx = FX + 9 * Math.sin(rad);
-    const ny = HEAD_Y - 9 * Math.cos(rad) - 2;
-    g.appendChild(
-      el("path", {
-        d: `M${nx.toFixed(1)},${ny.toFixed(1)} Q${((nx + bx) / 2 + 4).toFixed(1)},${((ny + by) / 2).toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`,
-        fill: "none",
-        stroke: ink(0.55),
-        "stroke-width": 1.15,
-      }),
-    );
-    const c = el("g", {
-      transform: `translate(${bx.toFixed(1)},${by.toFixed(1)}) rotate(${(deg + (rand() - 0.5) * 30).toFixed(0)})`,
-    });
-    g.appendChild(c);
-    const blade = crepeBlade(rr, rand);
-    // 두 장을 겹친다 — 아래는 하늘을 가리는 판, 위는 먹선 윤곽.
-    c.appendChild(el("path", { d: blade, fill: "#131316" }));
-    c.appendChild(
-      el("path", { d: blade, fill: "rgba(232,230,225,0.09)", stroke: ink(0.85), "stroke-width": 1 }),
-    );
-    for (let f = 0; f < 3; f += 1) {
-      // 속주름
-      const fa = rand() * 6.2832;
-      const fr = rr * (0.55 + rand() * 0.35);
-      c.appendChild(
-        el("path", {
-          d: `M${(Math.cos(fa) * fr).toFixed(1)},${(Math.sin(fa) * fr).toFixed(1)} Q${(Math.cos(fa + 1.2) * fr * 0.5).toFixed(1)},${(Math.sin(fa + 1.2) * fr * 0.5).toFixed(1)} ${(Math.cos(fa + 2.1) * fr * 0.75).toFixed(1)},${(Math.sin(fa + 2.1) * fr * 0.75).toFixed(1)}`,
-          fill: "none",
-          stroke: ink(0.26),
-          "stroke-width": 0.65,
-        }),
-      );
+  /** 태점 — 이끼 점 몇 개가 한 덩어리로 찍힌다. 크기는 시드가 정한다. */
+  function moss(parent: SVGGElement, pts: [number, number][], ord: number): void {
+    const [x0, y0] = pts[0]!;
+    const g = bloom(parent, x0, y0, ord);
+    for (const [x, y] of pts) {
+      g.appendChild(el("circle", { cx: x, cy: y, r: (0.9 + rand() * 0.8).toFixed(1), fill: ink(0.4) }));
     }
-    anchors.push({ x: bx, y: by });
+  }
+
+  /*
+   * 난수는 시안과 같은 차례로 쓴다 — 마디 둘, 태점 여섯, 잔가지 마디 셋, 감 마디.
+   * 차례가 바뀌면 같은 시드로도 다른 그루가 된다.
+   */
+
+  /* 벽에 박힌 뿌리 마디 — 그루 전체가 이 점을 축으로 흔들린다. */
+  const trunk = joint(tree, WALL, WALL_Y, 0.12, 0.03);
+  stroke(trunk, TRUNK, 4.6, 0.82, 0);
+  stroke(trunk, TRUNK_BARK, 1.4, 0.3, 0.4);
+  /* 꺾이는 마디 — 바깥 가지가 따로 휜다. */
+  const limb = joint(trunk, ELBOW.x, ELBOW.y, 0.3, 0.05);
+  stroke(limb, LIMB, 3.2, 0.8, 1);
+  stroke(limb, LIMB_BARK, 1, 0.28, 1.4);
+  moss(trunk, MOSS_TRUNK, 1);
+  moss(limb, MOSS_LIMB, 2);
+
+  /* 잔가지 셋 — 꺾이며 가늘어진다. */
+  const twigs = TWIGS.map((t) => {
+    const g = joint(t.onLimb ? limb : trunk, t.x, t.y, t.w, t.wf);
+    stroke(g, t.d, t.lw, t.op, t.ord);
+    return g;
   });
 
-  /* 꽃받침 잔 — 뿔 달린 종. 잎 밑동을 앞에서 감싸고 꼭지가 아래로 흐른다. */
-  const cup = el("g", { transform: `translate(${FX},${HEAD_Y})` });
-  bloom(head, FX, HEAD_Y, 1).appendChild(cup);
-  cup.appendChild(
+  /* 남은 잎 셋 — 아래는 하늘을 가리는 판, 위는 먹선 윤곽과 잎맥. */
+  for (const leaf of LEAVES) {
+    const g = bloom(leaf.twig === null ? trunk : twigs[leaf.twig]!, leaf.x, leaf.y, leaf.ord);
+    const transform = `translate(${leaf.x},${leaf.y}) rotate(${leaf.deg}) scale(${leaf.curl},1)`;
+    const d = leafPath(leaf.len, leaf.half);
+    g.appendChild(el("path", { d, fill: "#131316", transform }));
+    g.appendChild(
+      el("path", { d, fill: "rgba(232,230,225,0.07)", stroke: ink(0.75), "stroke-width": 0.9, transform }),
+    );
+    g.appendChild(
+      el("path", {
+        d: leafVeins(leaf.len, leaf.half),
+        fill: "none",
+        stroke: ink(0.28),
+        "stroke-width": 0.6,
+        transform,
+      }),
+    );
+    anchors.push(leafDrop(leaf));
+  }
+
+  /* 감 — 꼭지를 축으로 추처럼 흔들린다. 금은 이 한 알에만 쓴다. */
+  const stalk = joint(limb, STALK.x, STALK.y, 0.9, 0);
+  stroke(stalk, STALK_PATH, 2.4, 0.8, 2);
+  const fruit = el("g", { transform: `translate(${FRUIT_X},${FRUIT_Y})` });
+  bloom(stalk, FRUIT_X, FRUIT_Y - 2, 4).appendChild(fruit);
+  fruit.appendChild(el("path", { d: FRUIT, fill: "#131316" }));
+  fruit.appendChild(el("path", { d: FRUIT, fill: FRUIT_FILL, stroke: ink(0.85), "stroke-width": 1.2 }));
+  fruit.appendChild(el("path", { d: FRUIT_GROOVES, fill: "none", stroke: ink(0.2), "stroke-width": 0.8 }));
+  fruit.appendChild(
     el("path", {
-      d: CUP_BELL,
-      fill: "rgba(232,230,225,0.07)",
-      stroke: ink(0.8),
-      "stroke-width": 1.1,
+      d: FRUIT_GLOSS,
+      fill: "none",
+      stroke: ink(0.45),
+      "stroke-width": 1.6,
+      "stroke-linecap": "round",
     }),
   );
-  cup.appendChild(el("path", { d: CUP_HORNS, fill: "none", stroke: ink(0.6), "stroke-width": 1 }));
-  cup.appendChild(el("path", { d: CUP_STEM, fill: "none", stroke: ink(0.6), "stroke-width": 2 }));
+  fruit.appendChild(
+    el("path", { d: CALYX, fill: "rgba(232,230,225,0.1)", stroke: ink(0.8), "stroke-width": 1 }),
+  );
 
-  /* 심장 — 짧은 수술 뭉치의 굵은 금 꽃밥. */
-  const heart = el("g", { transform: `translate(${FX},${HEAD_Y - 6})` });
-  bloom(head, FX, HEAD_Y, 4).appendChild(heart);
-  for (let s = 0; s < 20; s += 1) {
-    const a = -1.5708 + (rand() - 0.5) * 2.8;
-    const len = 8 + rand() * 13;
-    const back = (rand() - 0.5) * 8;
-    const x = len * Math.cos(a) - back * Math.sin(a);
-    const y = len * Math.sin(a) + back * Math.cos(a);
-    heart.appendChild(
-      el("path", {
-        d: `M0,2 Q${(x * 0.45).toFixed(1)},${(y * 0.45).toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)}`,
-        fill: "none",
-        stroke: ink(0.5),
-        "stroke-width": 0.7,
-      }),
-    );
-    heart.appendChild(
-      el("circle", {
-        cx: x.toFixed(1),
-        cy: y.toFixed(1),
-        r: (2 + rand() * 0.7).toFixed(1),
-        fill: GOLD,
-        opacity: (0.8 + rand() * 0.2).toFixed(2),
-      }),
-    );
-  }
-  /* 긴 수술 여섯 — 꽃잎보다 길게 활처럼 아래로 흘러내린다. */
-  for (let l = 0; l < 6; l += 1) {
-    const a = 1.5708 + (l / 5 - 0.5) * 2.0;
-    const len = 48 + rand() * 28;
-    const back = (rand() > 0.5 ? 1 : -1) * (16 + rand() * 14);
-    const mx = len * 0.5 * Math.cos(a) - back * Math.sin(a);
-    const my = len * 0.5 * Math.sin(a) + back * Math.cos(a);
-    const x = len * Math.cos(a);
-    const y = len * Math.sin(a);
-    heart.appendChild(
-      el("path", {
-        d: `M0,0 Q${mx.toFixed(1)},${my.toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)}`,
-        fill: "none",
-        stroke: ink(0.72),
-        "stroke-width": 1.05,
-      }),
-    );
-    heart.appendChild(
-      el("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: 1.5, fill: GOLD, opacity: 0.85 }),
-    );
-  }
-
-  /* 갈라진 봉오리 구슬 둘. */
-  BUDS.forEach(([bx, by, scale], i) => {
-    const g = el("g", { transform: `translate(${bx},${by}) scale(${scale})` });
-    bloom(root, bx, by, 5 + i).appendChild(g);
-    g.appendChild(
-      el("circle", {
-        cx: 0,
-        cy: 0,
-        r: 7.5,
-        fill: "rgba(232,230,225,0.08)",
-        stroke: ink(0.75),
-        "stroke-width": 1,
-      }),
-    );
-    g.appendChild(el("path", { d: BUD_SPLIT, fill: "none", stroke: ink(0.4), "stroke-width": 0.7 }));
-  });
-
-  /* 낙화 못자리 — 꽃잎 여덟 장을 미리 파 두고 돌려 쓴다. */
-  const petals: Petal[] = [];
-  for (let i = 0; i < PETAL_POOL; i += 1) {
+  /* 지는 잎 못자리 — 여덟 장을 미리 파 두고 돌려 쓴다. */
+  const falls: Falling[] = [];
+  for (let i = 0; i < LEAF_POOL; i += 1) {
     const node = el("path", {
-      d: PETAL,
+      d: FALL_LEAF,
       fill: "rgba(232,230,225,0.12)",
       stroke: ink(0.6),
       "stroke-width": 0.8,
       opacity: 0,
     });
-    petalLayer.appendChild(node);
-    petals.push({ node, alive: false, x: 0, y: 0, vy: 0, ph: 0, rot: 0, land: LAND_TOP });
+    fallLayer.appendChild(node);
+    falls.push({ node, alive: false, x: 0, y: 0, vy: 0, ph: 0, rot: 0, land: LAND_TOP });
   }
   /* 파문 못자리 — 착수 지점의 동심원 세 겹, 원근으로 눕는다. */
   const ripples: Ripple[] = [];
@@ -325,7 +268,7 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
       g.appendChild(ring);
       rings.push(ring);
     }
-    petalLayer.appendChild(g);
+    fallLayer.appendChild(g);
     ripples.push({ g, rings, alive: false, x: 0, y: 0, born: 0 });
   }
 
@@ -346,7 +289,7 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
   /** 그루가 옮겨 앉은 양 — 좁은 무대에서는 가로만이 아니라 세로로도 움직인다. */
   let dx = 0;
   let dy = 0;
-  /** 꽃잎이 화면 밖으로 나갔는지 보는 기준 — layout()이 벌린 폭 그대로다. */
+  /** 지는 잎이 화면 밖으로 나갔는지 보는 기준 — layout()이 벌린 폭 그대로다. */
   const bounds = { left: 0, right: 700 };
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -358,7 +301,7 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
     if (dt > 0) {
       // 돌풍이 겹친 목표 각도로 끌려가는 감쇠 스프링 — 바람이 멎어도 한동안 흔들린다.
       const gust = noise1(clock * 0.7) - 0.5;
-      const target = dir * (2 + 9 * wind) + gust * (1.5 + 6 * wind);
+      const target = (dir * (2 + 9 * wind) + gust * (1.5 + 6 * wind)) * SWAY;
       spring.v += ((target - spring.b) * 4.0 - spring.v * 1.6) * dt;
       spring.b += spring.v * dt;
     }
@@ -385,31 +328,32 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
       );
     }
 
-    /* 낙화 — 다 그려진 뒤부터. 빈도는 바람·돌풍에 비례한다. */
+    /* 지는 잎 — 다 그려진 뒤부터. 빈도는 바람·돌풍에 비례한다. */
     if (!still && age > 2.5) {
       const gust = noise1(clock * 0.5);
-      if (Math.random() < dt * 0.8 * (0.05 + 1.0 * wind * gust)) {
-        const free = petals.find((p) => !p.alive);
+      if (Math.random() < dt * FALL.rate * (0.05 + 1.0 * wind * gust)) {
+        const free = falls.find((p) => !p.alive);
         const from = anchors[Math.floor(Math.random() * anchors.length)];
         if (free && from) {
           free.alive = true;
-          // 그루는 옮겨 갔어도 꽃잎은 전폭 좌표로 산다 — 지는 순간에만 이동량을 더한다.
+          // 그루는 옮겨 갔어도 지는 잎은 전폭 좌표로 산다 — 지는 순간에만 이동량을 더한다.
           free.x = from.x + dx;
           free.y = from.y + dy;
-          free.vy = 6;
+          free.vy = 6 * FALL.sink;
           free.ph = Math.random() * 6.28;
           free.rot = Math.random() * 360;
           free.land = LAND_TOP + Math.random() * LAND_SPAN;
         }
       }
     }
-    for (const p of petals) {
+    for (const p of falls) {
       if (!p.alive) {
         p.node.setAttribute("opacity", "0");
         continue;
       }
-      p.vy = Math.min(p.vy + 26 * dt, 24 + 20 * wind);
-      p.x += (dir * (16 + 55 * wind) + Math.sin(clock * 2.6 + p.ph) * 20) * dt;
+      // 넓은 잎은 꽃잎보다 천천히 가라앉고 바람에 더 밀린다.
+      p.vy = Math.min(p.vy + 26 * dt * FALL.sink, (24 + 20 * wind) * FALL.sink);
+      p.x += (dir * (16 + 55 * wind) * FALL.drift + Math.sin(clock * 2.6 + p.ph) * 20) * dt;
       p.y += p.vy * dt;
       p.rot += 90 * dt * Math.sin(clock * 1.7 + p.ph);
       if (p.x < bounds.left - 20 || p.x > bounds.right + 20) {
@@ -418,7 +362,7 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
         continue;
       }
       if (p.y >= p.land) {
-        /* 착수 — 꽃잎은 사라지고 그 자리에서 파문이 퍼진다. */
+        /* 착수 — 잎은 사라지고 그 자리에서 파문이 퍼진다. */
         const free = ripples.find((r) => !r.alive);
         if (free) {
           free.alive = true;
@@ -434,7 +378,7 @@ export function mountFlower(scope: ParentNode): FlowerScene | null {
         p.y < HORIZON_Y ? 0.7 : 0.7 * Math.min(1, 0.25 + (p.land - p.y) / 12);
       p.node.setAttribute(
         "transform",
-        `translate(${p.x.toFixed(1)},${p.y.toFixed(1)}) rotate(${p.rot.toFixed(1)}) scale(1.3)`,
+        `translate(${p.x.toFixed(1)},${p.y.toFixed(1)}) rotate(${p.rot.toFixed(1)}) scale(${FALL.scale})`,
       );
       p.node.setAttribute("opacity", op.toFixed(3));
     }
