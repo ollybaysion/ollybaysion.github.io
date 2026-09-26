@@ -1,0 +1,230 @@
+---
+/**
+ * 레시피 카드 한 장. 규칙(숫자 칸 · 비율 · 붓기 자)은 `src/lib/stage/coffee.ts`에 있다.
+ *
+ * `href`를 주면 카드 전체가 그 글로 가는 링크가 된다(`/coffee` 목록).
+ * `fullWater`는 붓기 막대의 자 — 한 화면의 카드끼리는 같은 값을 넘겨야 길이가 비교된다.
+ */
+import { colorOf } from '../config/categories.ts';
+import { type Recipe, pourTrack, specCells } from '../lib/stage/coffee.ts';
+
+interface Props {
+	recipe: Recipe;
+	date: string;
+	fullWater: number;
+	href?: string | undefined;
+}
+
+const { recipe, date, fullWater, href } = Astro.props;
+const Tag = href ? 'a' : 'div';
+const accent = colorOf('커피').base;
+const track = pourTrack(recipe, fullWater);
+---
+
+<Tag class="rcard" href={href} style={`--coffee-accent: ${accent};`}>
+	<div class="rc-top">
+		<span>{recipe.roaster ?? ''}</span>
+		<time datetime={date}>{date}</time>
+	</div>
+	<h2 class="rc-bean">{recipe.bean}</h2>
+	<dl class="rc-spec">
+		{
+			specCells(recipe).map((cell) => (
+				<div>
+					<dt>{cell.label}</dt>
+					<dd>{cell.value}</dd>
+				</div>
+			))
+		}
+	</dl>
+	<dl class="rc-rows">
+		{
+			recipe.grind && (
+				<>
+					<dt>분쇄</dt>
+					<dd>{recipe.grind}</dd>
+				</>
+			)
+		}
+		{
+			recipe.pours.length > 0 && (
+				<>
+					<dt>붓기</dt>
+					<dd>
+						<div class="rc-pours" style={`width: ${(track * 100).toFixed(2)}%;`}>
+							{recipe.pours.map((grams, i) => (
+								<div class="rc-pour" data-bloom={i === 0 ? '' : undefined} style={`flex-grow: ${grams};`}>
+									<i />
+									<span>{grams}</span>
+								</div>
+							))}
+						</div>
+					</dd>
+				</>
+			)
+		}
+		{
+			recipe.notes.length > 0 && (
+				<>
+					<dt>향미</dt>
+					<dd>
+						<ul class="rc-notes">
+							{recipe.notes.map((note) => (
+								<li>{note}</li>
+							))}
+						</ul>
+					</dd>
+				</>
+			)
+		}
+	</dl>
+</Tag>
+
+<style>
+	.rcard {
+		box-sizing: border-box;
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		padding: 18px 20px 20px;
+		background: #18181c;
+		border: 1px solid var(--stage-rule);
+		border-radius: 10px;
+		color: var(--stage-ink-dim);
+		transition:
+			border-color 0.18s ease,
+			background 0.18s ease;
+	}
+
+	a.rcard:hover,
+	a.rcard:focus-visible {
+		background: #1c1c21;
+		border-color: color-mix(in srgb, var(--coffee-accent) 55%, transparent);
+	}
+
+	.rc-top {
+		display: flex;
+		justify-content: space-between;
+		gap: 12px;
+		font-family: var(--stage-mono);
+		font-size: 11px;
+		letter-spacing: 0.02em;
+		color: var(--stage-muted);
+	}
+
+	.rc-bean {
+		margin: 0;
+		font-family: var(--stage-title);
+		font-size: 17px;
+		font-weight: 700;
+		line-height: 1.45;
+		color: var(--stage-ink);
+		text-wrap: balance;
+	}
+
+	/* 숫자 칸 — 위아래 가는 줄 사이에 같은 폭으로 늘어선다. */
+	.rc-spec {
+		display: grid;
+		grid-auto-flow: column;
+		grid-auto-columns: 1fr;
+		margin: 0;
+		padding: 10px 0;
+		border-top: 1px solid var(--stage-rule);
+		border-bottom: 1px solid var(--stage-rule);
+	}
+
+	.rc-spec dt {
+		font-family: var(--stage-mono);
+		font-size: 10px;
+		letter-spacing: 0.04em;
+		color: var(--stage-muted);
+	}
+
+	.rc-spec dd {
+		margin: 4px 0 0;
+		font-family: var(--stage-mono);
+		font-size: 14px;
+		font-variant-numeric: tabular-nums;
+		color: var(--stage-ink);
+	}
+
+	/* 분쇄 · 붓기 · 향미 — 이름 칸을 맞춘 두 칸 표. */
+	.rc-rows {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 12px 14px;
+		align-items: baseline;
+		margin: 0;
+	}
+
+	.rc-rows dt {
+		font-family: var(--stage-mono);
+		font-size: 10px;
+		letter-spacing: 0.04em;
+		color: var(--stage-muted);
+	}
+
+	.rc-rows dd {
+		margin: 0;
+		min-width: 0;
+		font-family: var(--stage-mono);
+		font-size: 12px;
+	}
+
+	.rc-pours {
+		display: flex;
+		gap: 3px;
+	}
+
+	.rc-pour {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		flex-basis: 0;
+		min-width: 0;
+	}
+
+	.rc-pour i {
+		display: block;
+		height: 6px;
+		border-radius: 2px;
+		background: var(--coffee-accent);
+		opacity: 0.9;
+	}
+
+	/* 뜸은 흐리게 — 물을 적시는 단계라 붓기와 결이 다르다. */
+	.rc-pour[data-bloom] i {
+		opacity: 0.45;
+	}
+
+	.rc-pour span {
+		font-size: 10px;
+		text-align: center;
+		color: var(--stage-muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.rc-notes {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.rc-notes li {
+		padding: 1px 10px;
+		border: 1px solid color-mix(in srgb, var(--coffee-accent) 45%, transparent);
+		border-radius: 999px;
+		font-family: var(--stage-sans);
+		font-size: 12px;
+		color: var(--coffee-accent);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.rcard {
+			transition: none;
+		}
+	}
+</style>
