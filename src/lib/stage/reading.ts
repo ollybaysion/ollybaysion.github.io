@@ -3,12 +3,17 @@
  *
  * 정본(`ListA.dc.html` · `SeriesList.dc.html`)엔 숫자만 있고 규칙이 없어서 여기서 정한다.
  * 한글 산문 기준 분당 500자, 최소 1분. 마크다운 문법과 코드 블록은 세지 않는다.
+ * 본문이 HTML인 글도 있다 — 태그·주석·그림(SVG)은 읽는 글이 아니라서 걷어 내고, 엔티티는 한 글자로 센다.
  */
 export const CHARS_PER_MINUTE = 500;
 
 export function readingMinutes(body: string): number {
 	const text = body
 		.replace(/```[\s\S]*?```/g, ' ')
+		.replace(/<!--[\s\S]*?-->/g, ' ')
+		.replace(/<(svg|style|script)\b[\s\S]*?<\/\1>/gi, ' ')
+		.replace(/<[^>]+>/g, ' ')
+		.replace(/&#?\w+;/g, '·')
 		.replace(/`[^`]*`/g, ' ')
 		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
 		.replace(/^\s{0,3}[#>]+\s*/gm, ' ')
