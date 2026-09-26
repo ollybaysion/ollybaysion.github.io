@@ -187,7 +187,7 @@ const n = (value: number) => Number(value.toFixed(3));
 			>
 		</a>
 
-		<text class="cat" x={HOLE.cx} text-anchor="middle" font-size={title.size} fill={deep}>
+		<text class="cat" x={HOLE.cx} text-anchor="middle" font-size={title.size} font-weight="500" fill={deep}>
 			{title.lines.map((line, i) => <tspan x={HOLE.cx} y={n(title.baselines[i]!)}>{line}</tspan>)}
 		</text>
 
@@ -250,10 +250,10 @@ const n = (value: number) => Number(value.toFixed(3));
 						/>
 						<path class="thumb-marks" d={thumbMarks(layout.latest!.thumb)} fill="none" />
 						<text
-							class="serif"
+							class="title"
 							x={layout.latest!.textX}
 							font-size="17"
-							font-weight="600"
+							font-weight="700"
 							fill="#e8e6e1"
 						>
 							{latestTitle.map((line, i) => (
@@ -340,11 +340,11 @@ const n = (value: number) => Number(value.toFixed(3));
 					/>
 					<path class="thumb-marks" d={thumbMarks(card.thumb)} fill="none" />
 					<text
-						class="serif"
+						class="title"
 						x={card.thumb.x}
 						data-lines={card.title.join(' ')}
 						font-size="14"
-						font-weight="600"
+						font-weight="700"
 						fill="#e8e6e1"
 					>
 						{lines.map((line, l) => (
@@ -475,9 +475,9 @@ const n = (value: number) => Number(value.toFixed(3));
 		font-family: var(--stage-sans);
 	}
 
-	#listscene .serif,
+	#listscene .title,
 	#listscene .cat {
-		font-family: var(--stage-serif);
+		font-family: var(--stage-title);
 	}
 
 	#listscene .mono {

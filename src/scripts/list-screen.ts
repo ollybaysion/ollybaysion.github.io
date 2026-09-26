@@ -126,7 +126,7 @@ if (svg && payload) {
       if (!post) return;
       card.setAttribute("href", `/blog/${post.slug}/`);
       drawThumb(card, post);
-      const title = card.querySelector<SVGTextElement>("text.serif")!;
+      const title = card.querySelector<SVGTextElement>("text.title")!;
       setLines(title, wrapText(post.title, 14, 286, 2));
       card.querySelector<SVGTextElement>("text.mono")!.textContent = post.date;
     });

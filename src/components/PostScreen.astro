@@ -237,12 +237,12 @@ const dot = minimapDot(post);
 		</a>
 
 		<text
-			class="serif"
+			class="title"
 			x={HEAD.category.x}
 			y={HEAD.category.y}
 			text-anchor="middle"
 			font-size={HEAD.category.size}
-			font-weight="700"
+			font-weight="800"
 			fill={categoryDeepColor(post.category)}>{post.category}</text
 		>
 
@@ -265,7 +265,7 @@ const dot = minimapDot(post);
 			>
 		</g>
 
-		<text class="serif" x={EDGE_L} font-size={HEAD.title.size} font-weight="700" fill="#e8e6e1">
+		<text class="title" x={EDGE_L} font-size={HEAD.title.size} font-weight="800" fill="#e8e6e1">
 			{titleLines.map((line, i) => <tspan x={EDGE_L} y={titleY[i]!}>{line}</tspan>)}
 		</text>
 		<text class="mono" x={EDGE_L} y={HEAD.meta} font-size="11" fill="#8f8c85">{meta}</text>
@@ -671,8 +671,8 @@ const dot = minimapDot(post);
 		font-family: var(--stage-sans);
 	}
 
-	.bleed-svg .serif {
-		font-family: var(--stage-serif);
+	.bleed-svg .title {
+		font-family: var(--stage-title);
 	}
 
 	.bleed-svg .mono {
@@ -731,17 +731,17 @@ const dot = minimapDot(post);
 
 	.body :global(h2) {
 		margin: 34px 0 16px 0;
-		font-family: var(--stage-serif);
+		font-family: var(--stage-title);
 		font-size: 19px;
-		font-weight: 600;
+		font-weight: 700;
 		color: var(--stage-ink);
 	}
 
 	.body :global(h3) {
 		margin: 28px 0 12px 0;
-		font-family: var(--stage-serif);
+		font-family: var(--stage-title);
 		font-size: 16px;
-		font-weight: 600;
+		font-weight: 700;
 		color: var(--stage-ink);
 	}
 
@@ -856,9 +856,9 @@ const dot = minimapDot(post);
 	}
 
 	.strip-name {
-		font-family: var(--stage-serif);
+		font-family: var(--stage-title);
 		font-size: 14px;
-		font-weight: 600;
+		font-weight: 700;
 		color: var(--strip-color);
 	}
 

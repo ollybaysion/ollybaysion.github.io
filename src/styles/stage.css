@@ -10,7 +10,9 @@
   --stage-muted: #8f8c85;
   --stage-rule: #2a2a2e;
 
-  --stage-serif: "Noto Serif KR", "Noto Serif", serif;
+  /* 제목 글꼴만 정본(본명조)에서 갈라졌다 — 시안 여덟 가지 중 고딕 A1(2026-09-26).
+     정본 굵기에서 한 칸씩 올려 쓴다(700 → 800, 600 → 700, 400 → 500). */
+  --stage-title: "Gothic A1", "Noto Sans KR", sans-serif;
   --stage-sans: "Noto Sans KR", system-ui, sans-serif;
   --stage-mono: "JetBrains Mono", ui-monospace, monospace;
 
