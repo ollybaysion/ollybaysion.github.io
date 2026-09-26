@@ -1,0 +1,462 @@
+/*
+  루프 엔지니어링 — 글 한 편 전용 스타일.
+  this-is-claude-code 의 docs/loop-engineering.html(html-doc 템플릿)에서 옮겨 왔다.
+  - 모든 선택자를 #cc-doc 아래로 묶는다. 무대 본문 규칙(.body[data-astro-cid] :not(pre) > code 등)보다
+    특이도가 높아야 해서 클래스가 아니라 id 로 묶었다.
+  - 블로그는 늘 어둡다 — 문서의 다크 토큰만 남기고, 중립색은 무대 팔레트로 바꿨다.
+  - 본문 기둥이 596px 로 고정이라 화면 폭 미디어쿼리는 그 폭에서 미리 판정해 풀어 넣었다.
+  - 문서 껍데기(.page · .masthead · .rail 목차)는 뺐다 — 블로그 머리와 길잡이가 대신한다.
+  본문에 CSS를 직접 넣지 않는 이유: plainText()가 <style> 안 글자를 임베딩에 넣는다.
+*/
+
+#cc-doc {
+	--bg: var(--stage-bg, #131316);
+	--surface: #1c1c21;
+	--sunken: #17171b;
+	--ink: var(--stage-ink, #e8e6e1);
+	--ink-2: #b0aca4;
+	--ink-3: var(--stage-muted, #8f8c85);
+	--line: #2e2e34;
+	--line-soft: #222227;
+	--accent: #E38C55;
+	--accent-bg: rgba(227, 140, 85, 0.13);
+	--blue: #83A9C6;
+	--blue-bg: rgba(131, 169, 198, 0.13);
+	--sans: var(--stage-sans, 'Noto Sans KR', sans-serif);
+	--mono: var(--stage-mono, 'JetBrains Mono', ui-monospace, monospace);
+	--serif: Georgia, "Times New Roman", "Apple SD Gothic Neo", serif;
+	--measure: none;
+	--rail: 13.5rem;
+	color: var(--ink);
+	font-family: var(--sans);
+	font-size: 16px;
+	line-height: 1.72;
+	-webkit-font-smoothing: antialiased;
+	word-break: keep-all;
+}
+
+/* 무대 본문 규칙을 걷어 낸다 — 문서는 UA 기본값 위에서 짜였다. 아래 문서 규칙이 같은 특이도로 뒤에 온다. */
+#cc-doc :is(p, h2, h3, blockquote, ul, ol, li, a, img, code, pre, hr, table, th, td) {
+	all: revert;
+}
+
+#cc-doc * {
+	box-sizing: border-box;
+}
+#cc-doc .standfirst {
+	max-width: var(--measure);
+	margin: 1.75rem 0 0;
+	font-size: 1.0625rem;
+	color: var(--ink-2);
+}
+#cc-doc .credits {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 2rem;
+	margin-top: 2.25rem;
+	font-family: var(--mono);
+	font-size: 0.75rem;
+	color: var(--ink-3);
+}
+#cc-doc .credits a {
+	color: var(--accent);
+}
+#cc-doc section {
+	padding-top: 3.5rem;
+	scroll-margin-top: 2rem;
+}
+#cc-doc .sec-head {
+	display: flex;
+	align-items: baseline;
+	gap: 0.85rem;
+	border-top: 1px solid var(--line);
+	padding-top: 1rem;
+	margin-bottom: 1.75rem;
+}
+#cc-doc .sec-head .num {
+	font-family: var(--mono);
+	font-size: 0.75rem;
+	letter-spacing: 0.1em;
+	color: var(--accent);
+	padding-top: 0.2rem;
+}
+#cc-doc h2 {
+	font-size: 1.5rem;
+	letter-spacing: -0.02em;
+	font-weight: 650;
+	margin: 0;
+	text-wrap: balance;
+}
+#cc-doc h3 {
+	font-size: 1.0625rem;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+	margin: 2rem 0 0.6rem;
+}
+#cc-doc p {
+	max-width: var(--measure);
+	margin: 0 0 1.1rem;
+}
+#cc-doc p:last-child {
+	margin-bottom: 0;
+}
+#cc-doc .lede {
+	font-size: 1.0625rem;
+	color: var(--ink-2);
+}
+#cc-doc strong {
+	font-weight: 650;
+	color: var(--ink);
+}
+#cc-doc .k,
+#cc-doc code {
+	font-family: var(--mono);
+	font-size: 0.86em;
+	background: var(--sunken);
+	border: 1px solid var(--line-soft);
+	border-radius: 3px;
+	padding: 0.08em 0.36em;
+	white-space: nowrap;
+}
+#cc-doc pre code {
+	background: none;
+	border: none;
+	padding: 0;
+	white-space: inherit;
+}
+#cc-doc a {
+	color: var(--accent);
+	text-underline-offset: 3px;
+}
+#cc-doc :focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+#cc-doc ul.plain {
+	max-width: var(--measure);
+	margin: 0 0 1.1rem;
+	padding-left: 1.05rem;
+}
+#cc-doc ul.plain li {
+	margin-bottom: 0.4rem;
+}
+#cc-doc ul.plain li::marker {
+	color: var(--ink-3);
+}
+#cc-doc ol.plain {
+	max-width: var(--measure);
+	margin: 0 0 1.1rem;
+	padding-left: 1.2rem;
+}
+#cc-doc ol.plain li {
+	margin-bottom: 0.55rem;
+}
+#cc-doc ol.plain li::marker {
+	color: var(--ink-3);
+	font-family: var(--mono);
+	font-size: 0.85em;
+}
+#cc-doc pre.code,
+#cc-doc pre.diagram {
+	background: var(--sunken);
+	border: 1px solid var(--line-soft);
+	border-radius: 4px;
+	padding: 1rem 1.15rem;
+	overflow-x: auto;
+	font-family: var(--mono);
+	font-size: 0.8125rem;
+	line-height: 1.65;
+	margin: 1.15rem 0;
+	color: var(--ink-2);
+}
+#cc-doc pre.diagram {
+	line-height: 1.35;
+}
+#cc-doc .decision {
+	border-left: 2px solid var(--accent);
+	background: var(--accent-bg);
+	border-radius: 0 4px 4px 0;
+	padding: 0.9rem 1.15rem;
+	margin: 1.25rem 0;
+	max-width: 44rem;
+	font-size: 0.9375rem;
+}
+#cc-doc .decision .d-label {
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--accent);
+	margin-bottom: 0.3rem;
+}
+#cc-doc blockquote {
+	margin: 2rem 0;
+	padding: 0 0 0 1.4rem;
+	border-left: 2px solid var(--accent);
+	max-width: 38rem;
+}
+#cc-doc blockquote p {
+	font-family: var(--serif);
+	font-size: 1.3125rem;
+	line-height: 1.5;
+	font-style: italic;
+	color: var(--ink);
+	max-width: none;
+	margin: 0;
+	text-wrap: balance;
+}
+#cc-doc blockquote cite {
+	display: block;
+	font-family: var(--mono);
+	font-style: normal;
+	font-size: 0.6875rem;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--ink-3);
+	margin-top: 0.9rem;
+}
+#cc-doc .steps {
+	max-width: 44rem;
+	margin: 0 0 1.25rem;
+	padding: 0;
+	list-style: none;
+	counter-reset: step;
+}
+#cc-doc .steps li {
+	display: grid;
+	grid-template-columns: 2.2rem 1fr;
+	gap: 1rem;
+	padding: 0.9rem 0;
+	border-bottom: 1px solid var(--line-soft);
+	counter-increment: step;
+}
+#cc-doc .steps li:first-child {
+	border-top: 1px solid var(--line-soft);
+}
+#cc-doc .steps li::before {
+	content: counter(step, decimal-leading-zero);
+	font-family: var(--mono);
+	font-size: 0.75rem;
+	color: var(--accent);
+	padding-top: 0.32rem;
+}
+#cc-doc .steps b {
+	display: block;
+	font-weight: 650;
+}
+#cc-doc .steps span {
+	font-size: 0.9375rem;
+	color: var(--ink-2);
+}
+#cc-doc .rules {
+	display: flex;
+	flex-direction: column;
+	gap: 0.9rem;
+	max-width: var(--measure);
+	margin: 0 0 1.25rem;
+	padding: 0;
+	list-style: none;
+}
+#cc-doc .rules li {
+	display: grid;
+	grid-template-columns: 2rem 1fr;
+	gap: 0.75rem;
+	font-size: 0.9375rem;
+}
+#cc-doc .rules .mark {
+	font-family: var(--mono);
+	color: var(--accent);
+	font-size: 0.8125rem;
+	padding-top: 0.12rem;
+}
+#cc-doc .rules b {
+	display: block;
+}
+#cc-doc .rules .state {
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--blue);
+	margin-left: 0.5rem;
+}
+#cc-doc .picker {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 1.25rem 0;
+	font-size: 0.9375rem;
+	min-width: 34rem;
+}
+#cc-doc .picker th {
+	text-align: left;
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--ink-3);
+	font-weight: 400;
+	border-bottom: 1px solid var(--line);
+	padding: 0 1rem 0.6rem 0;
+}
+#cc-doc .picker td {
+	border-bottom: 1px solid var(--line-soft);
+	padding: 0.75rem 1rem 0.75rem 0;
+	vertical-align: top;
+	color: var(--ink-2);
+}
+#cc-doc .picker td:first-child {
+	color: var(--ink);
+	font-weight: 650;
+}
+#cc-doc .table-scroll {
+	overflow-x: auto;
+}
+#cc-doc footer {
+	margin-top: 4.5rem;
+	padding-top: 1.25rem;
+	border-top: 1px solid var(--ink);
+	font-family: var(--mono);
+	font-size: 0.75rem;
+	color: var(--ink-3);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 2rem;
+}
+#cc-doc footer a {
+	color: var(--accent);
+}
+#cc-doc footer.derived {
+	display: block;
+}
+#cc-doc .diagram {
+	background: var(--sunken);
+	border: 1px solid var(--line-soft);
+	border-radius: 4px;
+	padding: 1.25rem 1.25rem;
+	margin: 1.25rem 0;
+	overflow-x: auto;
+}
+#cc-doc .flow {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	min-width: max-content;
+	font-family: var(--mono);
+	font-size: 0.75rem;
+	line-height: 1.35;
+}
+#cc-doc .node {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	padding: 0.42rem 0.7rem;
+	white-space: nowrap;
+	color: var(--ink);
+}
+#cc-doc .node.io {
+	background: transparent;
+	border-style: dashed;
+	color: var(--ink-3);
+}
+#cc-doc .node.lead {
+	border-color: var(--accent);
+	background: var(--accent-bg);
+	color: var(--accent);
+}
+#cc-doc .node.gate {
+	border-color: var(--blue);
+	background: var(--blue-bg);
+	color: var(--blue);
+}
+#cc-doc .arrow {
+	color: var(--accent);
+	flex: none;
+}
+#cc-doc .arrow.back {
+	color: var(--blue);
+}
+#cc-doc .branch {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	border-left: 1px solid var(--line);
+	padding-left: 0.55rem;
+}
+#cc-doc .diagram .caption {
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	color: var(--ink-3);
+	margin: 0.9rem 0 0;
+	max-width: none;
+}
+#cc-doc .versus {
+	display: grid;
+	gap: 1px;
+	background: var(--line);
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	overflow: hidden;
+	margin: 1.25rem 0;
+}
+#cc-doc .versus {
+	grid-template-columns: 1fr 1fr;
+}
+#cc-doc .versus > div {
+	background: var(--surface);
+	padding: 1.4rem 1.5rem 1.6rem;
+}
+#cc-doc .versus .tag {
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--ink-3);
+	display: block;
+	margin-bottom: 0.5rem;
+}
+#cc-doc .versus h4 {
+	margin: 0 0 0.75rem;
+	font-size: 1.125rem;
+	font-weight: 650;
+	letter-spacing: -0.015em;
+}
+#cc-doc .versus p {
+	font-size: 0.9375rem;
+	margin: 0 0 0.9rem;
+	max-width: none;
+}
+#cc-doc .versus .who {
+	color: var(--accent);
+}
+#cc-doc .versus dl {
+	margin: 0;
+	font-size: 0.875rem;
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0.3rem 1rem;
+	border-top: 1px dashed var(--line);
+	padding-top: 0.9rem;
+}
+#cc-doc .versus dt {
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--ink-3);
+	padding-top: 0.2rem;
+}
+#cc-doc .versus dd {
+	margin: 0;
+	color: var(--ink-2);
+}
+#cc-doc .versus dd b {
+	color: var(--ink);
+}
+
+/* 길잡이 목차에서 눌러 왔을 때 제목이 화면 끝에 붙지 않게(무대 본문과 같은 값). */
+#cc-doc h2,
+#cc-doc h3 {
+	scroll-margin-top: 28px;
+}
