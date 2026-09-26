@@ -90,40 +90,7 @@ function splitInTwo(name: string): [string, string] {
 	return [chars.slice(0, cut).join(''), chars.slice(cut).join('')];
 }
 
-/** 썸네일 안의 미니 무대 — 빛구멍 하나와 밴드 바다 두 겹. 전부 상자 크기의 비율이다. */
-const THUMB_HOLE = { cx: 0.3, cy: 0.34, r: 0.16 };
-const THUMB_WAVES = [
-	{ y0: 0.66, c1x: 0.3, c1y: 0.58, c2x: 0.55, c2y: 0.74, y1: 0.62, opacity: 0.16 },
-	{ y0: 0.82, c1x: 0.35, c1y: 0.74, c2x: 0.6, c2y: 0.9, y1: 0.78, opacity: 0.26 },
-];
-
-export interface ThumbScene {
-	hole: { cx: number; cy: number; r: number };
-	waves: { d: string; opacity: number }[];
-}
-
-export function thumbScene(rect: Rect): ThumbScene {
-	const right = rect.x + rect.w;
-	const bottom = rect.y + rect.h;
-	const at = (t: number) => rect.y + rect.h * t;
-
-	return {
-		hole: {
-			cx: rect.x + rect.w * THUMB_HOLE.cx,
-			cy: at(THUMB_HOLE.cy),
-			r: rect.h * THUMB_HOLE.r,
-		},
-		waves: THUMB_WAVES.map((wave) => ({
-			opacity: wave.opacity,
-			d:
-				`M${rect.x},${at(wave.y0)} ` +
-				`C${rect.x + rect.w * wave.c1x},${at(wave.c1y)} ` +
-				`${rect.x + rect.w * wave.c2x},${at(wave.c2y)} ` +
-				`${right},${at(wave.y1)} ` +
-				`L${right},${bottom} L${rect.x},${bottom} Z`,
-		})),
-	};
-}
+/* 썸네일 안의 그림은 `thumb.ts`가 그린다 — 여기서는 상자 자리만 잡는다. */
 
 /** 최근 1편 — 큰 썸네일 왼쪽, 제목·메타·소개 오른쪽. */
 const LATEST = {
