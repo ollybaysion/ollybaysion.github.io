@@ -2,7 +2,7 @@
  * 파생 데이터를 만드는 순수 함수들.
  * 빌드 스크립트는 파일만 읽고 쓰고, 계산은 전부 여기서 한다.
  */
-import { DISCOVERY_FLOOR, DISCOVERY_LIMIT, NEIGHBOR_LIMIT } from './constants.ts';
+import { DISCOVERY_FLOOR, DISCOVERY_LIMIT, NEIGHBOR_FLOOR, NEIGHBOR_LIMIT } from './constants.ts';
 import { proximity, screenDistance } from './position.ts';
 import type { Placement } from './position.ts';
 import { contentSimilarity } from './similarity.ts';
@@ -42,13 +42,14 @@ export function byDateThenSlug(a: PlacedEntry, b: PlacedEntry): number {
 }
 
 /**
- * 한 글에서 가까운 글 — 화면 거리순 상위 N편.
+ * 한 글에서 가까운 글 — 화면 거리순 상위 N편, 단 근접도가 문턱(`floor`) 이상인 글만.
  * 거리가 같으면 슬러그로 갈라서 빌드마다 순서가 바뀌지 않게 한다.
  */
 export function neighborsOf(
 	target: PlacedEntry,
 	all: readonly PlacedEntry[],
 	limit: number = NEIGHBOR_LIMIT,
+	floor: number = NEIGHBOR_FLOOR,
 ): Neighbor[] {
 	return all
 		.filter((entry) => entry.slug !== target.slug)
@@ -57,6 +58,7 @@ export function neighborsOf(
 			distance: screenDistance(target, entry),
 			proximity: proximity(target, entry),
 		}))
+		.filter((near) => near.proximity >= floor)
 		.sort((a, b) => a.distance - b.distance || a.slug.localeCompare(b.slug))
 		.slice(0, limit);
 }
@@ -108,10 +110,11 @@ export function discoveryMap(
 export function neighborMap(
 	all: readonly PlacedEntry[],
 	limit: number = NEIGHBOR_LIMIT,
+	floor: number = NEIGHBOR_FLOOR,
 ): Record<string, Neighbor[]> {
 	const out: Record<string, Neighbor[]> = {};
 	for (const entry of all) {
-		out[entry.slug] = neighborsOf(entry, all, limit);
+		out[entry.slug] = neighborsOf(entry, all, limit, floor);
 	}
 	return out;
 }
