@@ -16,6 +16,7 @@ import {
   type Selectable,
 } from "../lib/stage/list.ts";
 import { truncateText, wrapText } from "../lib/stage/text.ts";
+import { thumbScene, type Shape } from "../lib/stage/thumb.ts";
 
 /** 정본 좌표계. 메인과 같은 배율을 쓰려고 메인의 세로(790)도 들고 있는다. */
 const VIEW_W = 700;
@@ -93,6 +94,29 @@ if (svg && payload) {
 
   const metaOf = (post: Entry) => [post.date, ...post.tags].join(" · ");
 
+  /** 썸네일 그림을 이 글 것으로 다시 그린다. 상자 자리는 바탕 판에서 읽는다. */
+  function drawThumb(card: SVGAElement, post: Entry): void {
+    const ground = card.querySelector<SVGRectElement>(".thumb-ground");
+    const layer = card.querySelector<SVGGElement>("[data-thumb]");
+    if (!ground || !layer) return;
+    const rect = {
+      x: Number(ground.getAttribute("x")),
+      y: Number(ground.getAttribute("y")),
+      w: Number(ground.getAttribute("width")),
+      h: Number(ground.getAttribute("height")),
+    };
+    layer.replaceChildren(
+      ...thumbScene(rect, post).map(({ tag, attrs }: Shape) => {
+        const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+        for (const [name, value] of Object.entries(attrs)) {
+          node.setAttribute(name, String(value));
+        }
+        return node;
+      }),
+    );
+    card.style.setProperty("--thumb-accent", post.color);
+  }
+
   const cards = [...svg.querySelectorAll<SVGAElement>(".lcard")];
   const rows = [...svg.querySelectorAll<SVGGElement>(".lrow")];
 
@@ -101,10 +125,8 @@ if (svg && payload) {
       const post = chosen[i];
       if (!post) return;
       card.setAttribute("href", `/blog/${post.slug}/`);
-      for (const wave of card.querySelectorAll<SVGPathElement>(".thumb-wave")) {
-        wave.setAttribute("fill", post.color);
-      }
-      const title = card.querySelector<SVGTextElement>("text.serif")!;
+      drawThumb(card, post);
+      const title = card.querySelector<SVGTextElement>("text.title")!;
       setLines(title, wrapText(post.title, 14, 286, 2));
       card.querySelector<SVGTextElement>("text.mono")!.textContent = post.date;
     });

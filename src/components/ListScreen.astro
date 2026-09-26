@@ -21,10 +21,10 @@ import {
 	circleTitle,
 	listLayout,
 	selectSections,
-	thumbScene,
 } from '../lib/stage/list.ts';
 import { angleColor, categoryDeepColor } from '../lib/stage/palette.ts';
 import { truncateText, wrapText } from '../lib/stage/text.ts';
+import { THUMB_HALO_ID, thumbMarks, thumbScene } from '../lib/stage/thumb.ts';
 
 interface Props {
 	category: string;
@@ -73,7 +73,7 @@ const latestDesc = latest ? wrapText(latest.description, 12, LATEST_TEXT_W, 3) :
 const featured = sections.featured.map((post, i) => ({
 	post,
 	card: layout.featured!.cards[i]!,
-	scene: thumbScene(layout.featured!.cards[i]!.thumb),
+	scene: thumbScene(layout.featured!.cards[i]!.thumb, post),
 	lines: wrapText(post.title, 14, FEATURED_TEXT_W, 2),
 }));
 
@@ -83,7 +83,7 @@ const rows = sections.rows.map((post, i) => ({
 	title: truncateText(post.title, 15, ROW_TITLE_W),
 }));
 
-const latestScene = latest ? thumbScene(layout.latest!.thumb) : null;
+const latestScene = latest ? thumbScene(layout.latest!.thumb, latest) : null;
 const n = (value: number) => Number(value.toFixed(3));
 ---
 
@@ -140,6 +140,12 @@ const n = (value: number) => Number(value.toFixed(3));
 			<filter id="soften" x="-20%" y="-20%" width="140%" height="140%">
 				<feGaussianBlur stdDeviation="3"></feGaussianBlur>
 			</filter>
+			{/* 썸네일 달무리 — 달빛이 금빛으로 번지다 스러진다. */}
+			<radialGradient id={THUMB_HALO_ID}>
+				<stop offset="0%" stop-color="#f5e9c8" stop-opacity="0.5"></stop>
+				<stop offset="30%" stop-color="#d9a154" stop-opacity="0.22"></stop>
+				<stop offset="100%" stop-color="#d9a154" stop-opacity="0"></stop>
+			</radialGradient>
 			{
 				featured.map((_, i) => (
 					<clipPath id={`th-f${i}`}>
@@ -148,7 +154,7 @@ const n = (value: number) => Number(value.toFixed(3));
 							y={layout.featured!.cards[i]!.thumb.y}
 							width={layout.featured!.cards[i]!.thumb.w}
 							height={layout.featured!.cards[i]!.thumb.h}
-							rx="4"></rect>
+							rx="2"></rect>
 					</clipPath>
 				))
 			}
@@ -160,7 +166,7 @@ const n = (value: number) => Number(value.toFixed(3));
 							y={layout.latest!.thumb.y}
 							width={layout.latest!.thumb.w}
 							height={layout.latest!.thumb.h}
-							rx="4"
+							rx="2"
 						/>
 					</clipPath>
 				)
@@ -181,7 +187,7 @@ const n = (value: number) => Number(value.toFixed(3));
 			>
 		</a>
 
-		<text class="cat" x={HOLE.cx} text-anchor="middle" font-size={title.size} fill={deep}>
+		<text class="cat" x={HOLE.cx} text-anchor="middle" font-size={title.size} font-weight="500" fill={deep}>
 			{title.lines.map((line, i) => <tspan x={HOLE.cx} y={n(title.baselines[i]!)}>{line}</tspan>)}
 		</text>
 
@@ -208,7 +214,7 @@ const n = (value: number) => Number(value.toFixed(3));
 					>
 						최근
 					</text>
-					<a id="l-latest" href={`/blog/${latest.slug}/`}>
+					<a id="l-latest" href={`/blog/${latest.slug}/`} style={`--thumb-accent: ${latest.color};`}>
 						<rect
 							class="hit"
 							x={layout.latest!.thumb.x}
@@ -218,44 +224,36 @@ const n = (value: number) => Number(value.toFixed(3));
 						/>
 						<g clip-path="url(#th-latest)">
 							<rect
+								class="thumb-ground"
 								x={layout.latest!.thumb.x}
 								y={layout.latest!.thumb.y}
 								width={layout.latest!.thumb.w}
 								height={layout.latest!.thumb.h}
-								fill="#17171b"
+								fill="#141418"
 							/>
-							<circle
-								cx={n(latestScene.hole.cx)}
-								cy={n(latestScene.hole.cy)}
-								r={n(latestScene.hole.r)}
-								fill="#f5e9c8"
-								opacity="0.9"
-							/>
-							{latestScene.waves.map((wave, i) => (
-								<path
-									class="thumb-wave"
-									data-wave={i}
-									d={wave.d}
-									fill={latest.color}
-									opacity={wave.opacity}
-								/>
-							))}
+							<g data-thumb>
+								{latestScene.map(({ tag: Tag, attrs }) => (
+									<Tag {...attrs} />
+								))}
+							</g>
 						</g>
 						<rect
+							class="thumb-frame"
 							x={layout.latest!.thumb.x}
 							y={layout.latest!.thumb.y}
 							width={layout.latest!.thumb.w}
 							height={layout.latest!.thumb.h}
-							rx="4"
+							rx="2"
 							fill="none"
-							stroke="#26262b"
+							stroke="#2a2a30"
 							stroke-width="1"
 						/>
+						<path class="thumb-marks" d={thumbMarks(layout.latest!.thumb)} fill="none" />
 						<text
-							class="serif"
+							class="title"
 							x={layout.latest!.textX}
 							font-size="17"
-							font-weight="600"
+							font-weight="700"
 							fill="#e8e6e1"
 						>
 							{latestTitle.map((line, i) => (
@@ -301,7 +299,12 @@ const n = (value: number) => Number(value.toFixed(3));
 		}
 		{
 			featured.map(({ post, card, scene, lines }, i) => (
-				<a class="lcard" data-slot={i} href={`/blog/${post.slug}/`}>
+				<a
+					class="lcard"
+					data-slot={i}
+					href={`/blog/${post.slug}/`}
+					style={`--thumb-accent: ${post.color};`}
+				>
 					<rect
 						class="hit"
 						x={card.thumb.x}
@@ -310,28 +313,38 @@ const n = (value: number) => Number(value.toFixed(3));
 						height={card.date + 8 - card.thumb.y}
 					/>
 					<g clip-path={`url(#th-f${i})`}>
-						<rect x={card.thumb.x} y={card.thumb.y} width={card.thumb.w} height={card.thumb.h} fill="#17171b" />
-						<circle cx={n(scene.hole.cx)} cy={n(scene.hole.cy)} r={n(scene.hole.r)} fill="#f5e9c8" opacity="0.9" />
-						{scene.waves.map((wave, w) => (
-							<path class="thumb-wave" data-wave={w} d={wave.d} fill={post.color} opacity={wave.opacity} />
-						))}
+						<rect
+							class="thumb-ground"
+							x={card.thumb.x}
+							y={card.thumb.y}
+							width={card.thumb.w}
+							height={card.thumb.h}
+							fill="#141418"
+						/>
+						<g data-thumb>
+							{scene.map(({ tag: Tag, attrs }) => (
+								<Tag {...attrs} />
+							))}
+						</g>
 					</g>
 					<rect
+						class="thumb-frame"
 						x={card.thumb.x}
 						y={card.thumb.y}
 						width={card.thumb.w}
 						height={card.thumb.h}
-						rx="4"
+						rx="2"
 						fill="none"
-						stroke="#26262b"
+						stroke="#2a2a30"
 						stroke-width="1"
 					/>
+					<path class="thumb-marks" d={thumbMarks(card.thumb)} fill="none" />
 					<text
-						class="serif"
+						class="title"
 						x={card.thumb.x}
 						data-lines={card.title.join(' ')}
 						font-size="14"
-						font-weight="600"
+						font-weight="700"
 						fill="#e8e6e1"
 					>
 						{lines.map((line, l) => (
@@ -462,9 +475,9 @@ const n = (value: number) => Number(value.toFixed(3));
 		font-family: var(--stage-sans);
 	}
 
-	#listscene .serif,
+	#listscene .title,
 	#listscene .cat {
-		font-family: var(--stage-serif);
+		font-family: var(--stage-title);
 	}
 
 	#listscene .mono {
@@ -492,6 +505,26 @@ const n = (value: number) => Number(value.toFixed(3));
 	#listscene a:hover .mono,
 	#listscene a:focus-visible .mono {
 		fill: #b6b2aa;
+	}
+
+	/* 썸네일 재단 표시 — 평소엔 프레임선만큼 옅고, 올리면 글의 색으로 선다. */
+	.thumb-marks {
+		stroke: #3a3a42;
+		stroke-width: 1;
+	}
+
+	#listscene a:hover .thumb-marks,
+	#listscene a:focus-visible .thumb-marks {
+		stroke: var(--thumb-accent, #8f8c85);
+	}
+
+	#listscene a:hover .thumb-frame,
+	#listscene a:focus-visible .thumb-frame {
+		stroke: #3a3a42;
+	}
+
+	#listscene .thumb-marks {
+		transition: stroke 0.18s ease;
 	}
 
 	/* 글자 위에서만 눌리면 답답하다 — 행·카드 전체가 링크가 되게 투명한 판을 깐다. */

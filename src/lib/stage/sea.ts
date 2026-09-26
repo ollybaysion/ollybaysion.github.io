@@ -186,6 +186,105 @@ function segments(mode: Shape['seg'], p: number, seed: number): [number, number]
 }
 
 /**
+ * 부서짐 — 줄 하나가 굵어지는 게 아니다. 마루의 **한 점에서 터져 양옆으로 번진다**(peel).
+ * 터진 자리부터 마루선이 거품 여러 가닥으로 풀려 앞으로(화면 아래로) 쏟아지고,
+ * 가닥은 점점 성겨져 레이스처럼 흩어진다. 터지는 순간 그 자리에서 물보라가 튀어 올랐다 떨어진다.
+ *
+ * 거품은 파도를 따라가지 않는다. 터진 자리에 남아 조금 밀려 나갈 뿐이라, 마루가 물가를 지나
+ * 사라진 뒤에도 몇 초 동안 잔물결로 남아 천천히 스러진다.
+ *
+ * 터지기 전에는 마루가 조금 굵고 밝아질 뿐이다 — 일어서는 파도는 무게로 보여야지 두께로 보이면
+ * 형광펜이 된다.
+ */
+const BREAK = {
+	/** 첫 자리가 터지는 때(p)와, 줄 끝까지 번지는 데 드는 p(≈1.7초). 물가(p 1) 전에 다 터진다. */
+	start: 0.8,
+	spread: 0.15,
+	/** 터진 자리의 마루선이 거품에 자리를 내주는 데 드는 p(≈1.3초). */
+	crest: 0.12,
+	/** 입술 물결무늬가 매달려 있는 p(≈1.1초). */
+	lip: 0.1,
+	/** 한 자리가 터진 뒤 거품이 다 풀리기까지의 p(≈4.5초). */
+	settle: 0.4,
+	/** 거품이 앞으로 밀려 나가는 거리(무대 단위)와, 그 63%를 가는 데 드는 초. */
+	drift: 12,
+	driftTime: 1.6,
+	/** 거품 가닥 수. 첫 가닥은 마루 위에 남은 물보라 줄이다. */
+	strands: 5,
+	/** 가닥을 찍는 간격(무대 단위). */
+	step: 3.5,
+	/** 입술 물결무늬의 깊이(무대 단위). */
+	curl: 3.2,
+	/** 물보라 — 700폭당 알 수, 튀는 세기(단위/초), 중력(단위/초²), 알 하나가 사는 초. */
+	spray: 90,
+	lift: [12, 28],
+	gravity: 42,
+	sprayLife: [0.8, 1.6],
+} as const;
+
+/** 마지막 거품이 스러지는 때. 파도는 물가를 지나서도 이때까지 그린다. */
+const FOAM_END = BREAK.start + BREAK.spread + BREAK.settle;
+/** 마루선(과 윤슬이 물리는 파도 목록)이 사는 끝. */
+const CREST_END = 1.06;
+
+/** 줄 위 자리 u(0~1)가 터지는 때. 한 점 u0에서 양옆으로 같은 빠르기로 번진다. */
+function breakAt(u: number, u0: number): number {
+	return BREAK.start + (BREAK.spread * Math.abs(u - u0)) / Math.max(u0, 1 - u0);
+}
+
+/**
+ * x마다 알파가 다른 한 획 — 캔버스 획은 알파가 하나라 그라디언트 정거장으로 싣는다.
+ * 토막으로 끊어 그으면 둥근 끝이 이웃과 겹쳐 알파가 두 번 쌓인다(선에 알이 맺힌다).
+ */
+function alphaStroke(
+	g: CanvasRenderingContext2D,
+	xa: number,
+	xb: number,
+	yAt: (x: number) => number,
+	alphaAt: (x: number) => number,
+	lw: number,
+	step = 7,
+): void {
+	const stops = 24;
+	const fade = g.createLinearGradient(xa, 0, xb, 0);
+	for (let i = 0; i <= stops; i += 1) {
+		const t = i / stops;
+		fade.addColorStop(t, `rgba(${INK},${clamp01(alphaAt(xa + (xb - xa) * t)).toFixed(3)})`);
+	}
+	g.strokeStyle = fade;
+	g.lineWidth = lw;
+	g.beginPath();
+	g.moveTo(xa, yAt(xa));
+	for (let x = xa + step; x < xb; x += step) g.lineTo(x, yAt(x));
+	g.lineTo(xb, yAt(xb));
+	g.stroke();
+}
+
+/**
+ * 붓 한 획 — 가운데가 굵고 양 끝이 가늘다. 얇게 한 번 온 길이를, 굵게 한 번 가운데만 긋는다
+ * (가운데는 두 번 칠해져 짙어진다 — 붓에 먹이 모인 자리다). 두 점 이하는 점 하나로 찍는다.
+ */
+function brush(g: CanvasRenderingContext2D, pts: [number, number][], lw: number, alpha: number): void {
+	g.strokeStyle = `rgba(${INK},${alpha.toFixed(3)})`;
+	const line = (from: number, to: number) => {
+		g.beginPath();
+		g.moveTo(pts[from]![0], pts[from]![1]);
+		for (let i = from + 1; i <= to; i += 1) g.lineTo(pts[i]![0], pts[i]![1]);
+		g.stroke();
+	};
+	if (pts.length < 3) {
+		g.lineWidth = lw * 0.8;
+		line(0, pts.length - 1);
+		return;
+	}
+	g.lineWidth = lw * 0.5;
+	line(0, pts.length - 1);
+	const cut = Math.floor(pts.length * 0.25);
+	g.lineWidth = lw;
+	line(cut, pts.length - 1 - cut);
+}
+
+/**
  * 파도 한 장. `w`와 `depth`는 무대 좌표 — 폭은 화면 끝까지, 깊이는 수평선에서 바닥까지다.
  * 캔버스는 이미 무대 단위로 늘려 놨으니 여기서는 정본 좌표 그대로 그린다.
  */
@@ -202,78 +301,187 @@ function drawOne(
 	clock: number,
 	tilt: number,
 ): void {
+	g.lineCap = 'round';
+	g.lineJoin = 'round';
+	// 터지는 첫 자리 — 한 파도에 하나. 뒤따르는 줄(너울)도 같은 자리에서 터진다.
+	const u0 = 0.15 + 0.7 * hash(seed0 + 5.5);
+	const power = e * (0.55 + strength / 22);
+
 	for (let r = 0; r < shape.rows; r += 1) {
 		const p = pIn - r * 0.038;
-		if (p < 0 || p > 1.06) continue;
+		if (p < 0 || p > FOAM_END) continue;
 		const seed = seed0 + r * 31.3;
-		const a = life2(p, trough) * e * (0.55 + strength / 22) * (r === 0 ? 1 : 0.42 / r);
-		if (a < 0.012) continue;
+		const a = Math.min(1, life2(p, trough) * power * (r === 0 ? 1 : 0.42 / r));
+		const crestOn = p <= CREST_END && a >= 0.012;
+		const foamOn = r === 0 && p >= BREAK.start;
+		if (!crestOn && !foamOn) continue;
 
-		const cr = crashAmt(p);
-		const yb = p * depth;
-		const lw = (1 + 1.7 * bump(0.13, 0.33, p) + 7.5 * cr) * (r === 0 ? 1 : 0.55);
-		const jit = 0.7 + 1.4 * bump(0.13, 0.33, p) + 6.5 * cr;
-		const camp = shape.curve * (1 - 0.62 * clamp01(p)) * (0.7 + 0.3 * Math.sin(seed));
+		const rise = sstep(0.66, BREAK.start, p);
+		const lw = (1 + 1.7 * bump(0.13, 0.33, p) + 1.3 * rise) * (r === 0 ? 1 : 0.55);
+		const jit = 0.7 + 1.4 * bump(0.13, 0.33, p) + 1.2 * rise;
 		const cfrq = 0.75 + 0.55 * hash(seed + 2.2);
-		const cphs = seed * 0.7 + clock * 0.11;
-		const tl = tilt * (1 - 0.5 * clamp01(p));
+		const breaking = p >= BREAK.start;
 
-		for (const [q, [s0, s1]] of segments(shape.seg, p, seed).entries()) {
+		for (const [q, [s0, s1]] of segments(shape.seg, Math.min(p, CREST_END), seed).entries()) {
 			const xa = s0 * w;
 			const xb = s1 * w;
-			const yAt = (x: number): number => {
+			/**
+			 * 마루의 굽이·기울기·떨림 — 깊이(y)만 빼고, 일생 `pp` · 시각 `at`의 모양이다.
+			 * 거품은 제 자리가 터진 그 순간의 모양을 물려받아 굳힌다.
+			 */
+			const bend = (x: number, pp: number, at: number): number => {
 				const u = x / w;
+				const camp = shape.curve * (1 - 0.62 * clamp01(pp)) * (0.7 + 0.3 * Math.sin(seed));
 				return (
-					yb +
-					tl * (u - 0.5) +
-					camp * Math.sin(2 * Math.PI * (u * cfrq) + cphs) +
+					tilt * (1 - 0.5 * clamp01(pp)) * (u - 0.5) +
+					camp * Math.sin(2 * Math.PI * (u * cfrq) + seed * 0.7 + at * 0.11) +
 					(noise1(x * 0.021 + seed) - 0.5) * jit +
 					(noise1(x * 0.115 + seed * 2.3) - 0.5) * jit * 0.5
 				);
 			};
+			const yAt = (x: number): number => p * depth + bend(x, p, clock);
+			/*
+			  토막 끝은 흐려서 사라진다 — 자른 자국이 보이면 종이를 오린 것처럼 된다.
+			  온 줄(solid)은 끝이 화면 밖이라 흐릴 게 없다.
+			*/
+			const fw = shape.seg === 'solid' ? 0 : Math.min(26, (xb - xa) * 0.4);
+			const edge = (x: number) => (fw === 0 ? 1 : clamp01(Math.min(x - xa, xb - x) / fw));
+			/** 이 자리가 터진 뒤 흐른 p. 음수면 아직이다. */
+			const since = (x: number) => p - breakAt(x / w, u0);
+			/** 거품이 얼마나 풀렸나 — 0 막 터짐 · 1 다 스러짐. */
+			const age = (x: number) => clamp01(since(x) / BREAK.settle);
+			/**
+			 * 거품이 앉는 깊이 — 터진 자리에서 조금 밀려 나가다 멈춘다. 마루를 따라가지 않고,
+			 * 모양도 터진 순간의 마루 그대로다(마루의 느린 굽이를 따라 일렁이지 않는다).
+			 */
+			const foamY = (x: number): number => {
+				const pb = breakAt(x / w, u0);
+				const t = Math.max(0, p - pb) * TRAVEL;
+				return (
+					pb * depth +
+					bend(x, pb, clock - t) +
+					BREAK.drift * (1 - Math.exp(-t / BREAK.driftTime))
+				);
+			};
 
-			g.lineCap = 'round';
-			g.lineJoin = 'round';
-			g.lineWidth = lw;
-			const al = Math.min(a, 1).toFixed(3);
-			if (shape.seg === 'solid') {
-				g.strokeStyle = `rgba(${INK},${al})`;
-			} else {
-				/*
-				  토막 끝은 흐려서 사라진다 — 자른 자국이 보이면 종이를 오린 것처럼 된다.
-				  흐리는 건 그라디언트지 토막이 아니다. 7단위씩 따로 그으면 둥근 끝이 이웃과
-				  겹쳐 알파가 두 번 쌓인다 — 선에 알이 줄줄이 맺혀 점선이 된다.
-				*/
-				const fw = Math.min(26, (xb - xa) * 0.4);
-				const edge = fw / Math.max(1e-6, xb - xa);
-				const fade = g.createLinearGradient(xa, 0, xb, 0);
-				fade.addColorStop(0, `rgba(${INK},0)`);
-				fade.addColorStop(edge, `rgba(${INK},${al})`);
-				fade.addColorStop(1 - edge, `rgba(${INK},${al})`);
-				fade.addColorStop(1, `rgba(${INK},0)`);
-				g.strokeStyle = fade;
-			}
-			// 한 획 — 이어 그어야 겹치는 자리가 생기지 않는다.
-			g.beginPath();
-			g.moveTo(xa, yAt(xa));
-			for (let x = xa + 7; x < xb; x += 7) g.lineTo(x, yAt(x));
-			g.lineTo(xb, yAt(xb));
-			g.stroke();
-
-			// 부서짐 물보라 — 알 갯수는 정본 700폭 기준을 실제 폭에 비례시켜 밀도를 지킨다.
-			if (cr > 0.12 && r === 0) {
-				const n = Math.round(58 * cr * (s1 - s0) * (w / 700));
-				for (let i = 0; i < n; i += 1) {
-					const hx = xa + hash(i * 1.7 + seed + q) * (xb - xa);
-					const hy = yAt(hx) + (hash(i * 3.1 + seed) - 0.5) * 26 * cr;
-					g.globalAlpha = Math.min(a, 1) * cr * (0.22 + hash(i * 5.3 + q) * 0.68);
-					g.fillStyle = `rgb(${INK})`;
+			// 마루선 — 터진 자리부터 거품에 자리를 내주며 사라진다.
+			if (crestOn && !breaking) {
+				if (fw === 0) {
+					g.strokeStyle = `rgba(${INK},${a.toFixed(3)})`;
+					g.lineWidth = lw;
 					g.beginPath();
-					g.arc(hx, hy, 0.5 + hash(q * 7.9) * 1.6, 0, Math.PI * 2);
-					g.fill();
+					g.moveTo(xa, yAt(xa));
+					for (let x = xa + 7; x < xb; x += 7) g.lineTo(x, yAt(x));
+					g.lineTo(xb, yAt(xb));
+					g.stroke();
+				} else {
+					alphaStroke(g, xa, xb, yAt, (x) => a * edge(x), lw);
 				}
-				g.globalAlpha = 1;
+				continue;
 			}
+			if (crestOn) {
+				// 터지는 자리는 한순간 밝아졌다가 풀린다.
+				const gone = (x: number) => clamp01(since(x) / BREAK.crest);
+				alphaStroke(
+					g,
+					xa,
+					xb,
+					yAt,
+					(x) => a * edge(x) * (1 + 0.5 * bump(0, 0.3, gone(x))) * (1 - gone(x)) ** 2.4,
+					lw,
+				);
+			}
+			if (!foamOn) continue;
+
+			// 거품의 세기 — 마루의 밝기(일생)와 따로 간다. 마루가 사라져도 거품은 남는다.
+			const fa = Math.min(1, power * 1.25);
+
+			// 입술 — 막 터진 자리에서 마루가 앞으로 말려 떨어진다. 마루 밑에 매달린 물결무늬(︶︶︶)가
+			// 터짐을 따라 옆으로 번지고, 거품이 되면서 사라진다.
+			const lip = (x: number) =>
+				since(x) >= 0 ? bump(0, 1, clamp01(since(x) / BREAK.lip)) : 0;
+			alphaStroke(
+				g,
+				xa,
+				xb,
+				// 물결무늬 폭은 6~11단위로 들쭉날쭉하다 — 고르면 뜨개질 무늬가 된다.
+				(x) =>
+					foamY(x) +
+					0.8 +
+					BREAK.curl * lip(x) * Math.abs(Math.sin(Math.PI * (x / 8.5 + 1.4 * noise1(x * 0.04 + seed)))),
+				(x) => fa * edge(x) * 0.85 * lip(x),
+				1,
+				// 물결무늬(폭 ~8.5)보다 성기게 찍으면 무늬가 톱니로 뭉개진다.
+				2,
+			);
+
+			/*
+			  거품 가닥 — 터진 자리에서 풀려나 앞으로 벌어진다. 붓이 마른 자리처럼 끊기고,
+			  한 토막씩 제 차례에 옅어져 사라진다 — 그래서 풀릴수록 성기고, 레이스처럼 오래 남는다.
+
+			  가닥의 모양(끊긴 자리 · 굽이)은 시각에 묶지 않는다. 시각에 묶으면 토막 끝이 찍는 칸을
+			  한 칸씩 건너뛰며 매 프레임 떨린다(붓 가운데 굵은 자리도 같이 튄다). 움직이는 건
+			  앞으로 벌어지는 것과 옅어지는 것뿐이다. 찍는 칸도 토막이 아니라 무대에 박아 둔다.
+			*/
+			const from = Math.ceil(xa / BREAK.step) * BREAK.step;
+			for (let j = 0; j < BREAK.strands; j += 1) {
+				const sj = seed * 1.3 + j * 17.7;
+				const lwj = j === 0 ? 0.8 : 1.6 - 0.2 * j;
+				const offset = (x: number, k: number) =>
+					(j === 0 ? -1.2 - 1.5 * k : (j - 0.4) * 1.4 + k * (2 + 3.2 * j)) +
+					(noise1(x * 0.17 + sj * 2) - 0.5) * (1.6 + 3 * k);
+				let piece: [number, number][] = [];
+				let alpha = 0;
+				let width = 0;
+				for (let x = from; x <= xb + BREAK.step; x += BREAK.step) {
+					const k = age(x);
+					const on =
+						x <= xb &&
+						since(x) >= 0 &&
+						k < 1 &&
+						noise1(x * 0.045 * (1 + 0.3 * j) + sj) > 0.44 + 0.05 * j;
+					if (on) {
+						if (piece.length === 0) {
+							// 토막마다 사라질 차례가 다르다(k 0.35~1).
+							const last = 0.35 + 0.65 * hash(x * 0.37 + sj);
+							alpha = clamp01(
+								fa *
+									edge(x) *
+									(0.95 - 0.13 * j) *
+									sstep(0, 0.03, k) *
+									(1 - k) ** 0.8 *
+									clamp01((last - k) / 0.2),
+							);
+							width = lwj * (1 - 0.45 * k);
+						}
+						piece.push([x, foamY(x) + offset(x, k)]);
+					} else if (piece.length > 0) {
+						if (alpha > 0.01) brush(g, piece, width, alpha);
+						piece = [];
+					}
+				}
+			}
+
+			// 물보라 — 터지는 순간 그 자리에서 튀어 올랐다가 떨어진다. 터짐이 번지는 대로 따라간다.
+			// 알 갯수는 정본 700폭 기준을 실제 폭에 비례시켜 밀도를 지킨다.
+			const n = Math.round(BREAK.spray * (s1 - s0) * (w / 700));
+			const [lift0, lift1] = BREAK.lift;
+			const [life0, life1] = BREAK.sprayLife;
+			g.fillStyle = `rgb(${INK})`;
+			for (let i = 0; i < n; i += 1) {
+				const u = s0 + hash(i * 1.7 + seed + q) * (s1 - s0);
+				const t = since(u * w) * TRAVEL;
+				const span = life0 + (life1 - life0) * hash(i * 2.9 + seed);
+				if (t < 0 || t > span) continue;
+				const v0 = lift0 + (lift1 - lift0) * hash(i * 3.7 + seed);
+				const x = u * w + (hash(i * 4.3 + seed) - 0.5) * 10 * t;
+				const y = foamY(u * w) - 1 - (v0 * t - 0.5 * BREAK.gravity * t * t);
+				g.globalAlpha = fa * edge(u * w) * (1 - t / span) * (0.35 + 0.6 * hash(i * 5.3 + q));
+				g.beginPath();
+				g.arc(x, y, (0.35 + 0.75 * hash(i * 6.1 + seed)) * (1 - 0.4 * (t / span)), 0, Math.PI * 2);
+				g.fill();
+			}
+			g.globalAlpha = 1;
 		}
 	}
 }
@@ -335,15 +543,17 @@ export function createSea(): Sea {
 			const waves: SeaWave[] = [];
 			for (const wave of born) {
 				const p = (clock - wave.born) / TRAVEL;
-				if (p > 1.06) continue;
+				// 물가를 지난 파도도 거품이 남아 있는 동안은 그린다. 윤슬이 물리는 건 마루가 사는 동안만.
+				if (p > FOAM_END) continue;
 				drawOne(g, w, depth, p, wave.seed, wave.e, KINDS[wave.mode], strength, trough, clock, tilt);
+				if (p > CREST_END) continue;
 				waves.push({
 					y: HORIZON_Y + p * depth,
 					a: life2(p, trough) * wave.e * (0.55 + strength / 22),
 					cr: crashAmt(p),
 				});
 			}
-			while (born.length && (clock - born[0]!.born) / TRAVEL > 1.06) born.shift();
+			while (born.length && (clock - born[0]!.born) / TRAVEL > FOAM_END) born.shift();
 
 			return { wind, dir: (windDir(sec) - 0.5) * 2, waves };
 		},

@@ -1,21 +1,15 @@
 /**
  * 정본 대조 — `ListA.dc.html`이 글 8편짜리 한 장에 손으로 박아둔 좌표가
- * `listLayout` · `thumbScene` · `circleTitle` 규칙에서 그대로 나오는지.
+ * `listLayout` · `circleTitle` 규칙에서 그대로 나오는지. 썸네일 그림은 `thumb.test.ts`.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   circleTitle,
   listLayout,
-  thumbScene,
 } from "../../src/lib/stage/list.ts";
 
 const fx = (n: number) => Number(n.toFixed(4));
-
-/** 경로 문자열에서 숫자만 뽑는다 — 정본도 우리도 부동소수 꼬리를 그대로 찍는다. */
-function pathNumbers(d: string): number[] {
-  return (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map((n) => fx(Number(n)));
-}
 
 /** 정본 8편 = 최근 1 + 주요 2 + 전체 5. */
 const CANON = listLayout({ latest: 1, featured: 2, rows: 5 });
@@ -98,50 +92,6 @@ describe("listLayout — 글이 적은 카테고리", () => {
       layout.rows!.rows.map((row) => row.dot),
       [464, 520],
     );
-  });
-});
-
-describe("thumbScene — 정본 재현", () => {
-  it("최근 1편 썸네일의 빛구멍과 파도가 정본과 같다", () => {
-    const scene = thumbScene({ x: 52, y: 199, w: 280, h: 170 });
-    assert.deepEqual(
-      [fx(scene.hole.cx), fx(scene.hole.cy), fx(scene.hole.r)],
-      [136, 256.8, 27.2],
-    );
-    assert.deepEqual(pathNumbers(scene.waves[0]!.d), [
-      52, 311.2, 136, 297.6, 206, 324.8, 332, 304.4, 332, 369, 52, 369,
-    ]);
-    assert.deepEqual(pathNumbers(scene.waves[1]!.d), [
-      52, 338.4, 150, 324.8, 220, 352, 332, 331.6, 332, 369, 52, 369,
-    ]);
-    assert.deepEqual(
-      scene.waves.map((wave) => wave.opacity),
-      [0.16, 0.26],
-    );
-  });
-
-  it("주요 2편 썸네일도 같은 비율에서 나온다", () => {
-    const left = thumbScene({ x: 52, y: 443, w: 286, h: 118 });
-    assert.deepEqual(
-      [fx(left.hole.cx), fx(left.hole.cy), fx(left.hole.r)],
-      [137.8, 483.12, 18.88],
-    );
-    assert.deepEqual(pathNumbers(left.waves[0]!.d), [
-      52, 520.88, 137.8, 511.44, 209.3, 530.32, 338, 516.16, 338, 561, 52, 561,
-    ]);
-    assert.deepEqual(pathNumbers(left.waves[1]!.d), [
-      52, 539.76, 152.1, 530.32, 223.6, 549.2, 338, 535.04, 338, 561, 52, 561,
-    ]);
-
-    const right = thumbScene({ x: 362, y: 443, w: 286, h: 118 });
-    assert.deepEqual(
-      [fx(right.hole.cx), fx(right.hole.cy), fx(right.hole.r)],
-      [447.8, 483.12, 18.88],
-    );
-    assert.deepEqual(pathNumbers(right.waves[0]!.d), [
-      362, 520.88, 447.8, 511.44, 519.3, 530.32, 648, 516.16, 648, 561, 362,
-      561,
-    ]);
   });
 });
 
