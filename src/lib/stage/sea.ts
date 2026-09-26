@@ -243,6 +243,7 @@ function alphaStroke(
 	yAt: (x: number) => number,
 	alphaAt: (x: number) => number,
 	lw: number,
+	step = 7,
 ): void {
 	const stops = 24;
 	const fade = g.createLinearGradient(xa, 0, xb, 0);
@@ -254,7 +255,7 @@ function alphaStroke(
 	g.lineWidth = lw;
 	g.beginPath();
 	g.moveTo(xa, yAt(xa));
-	for (let x = xa + 7; x < xb; x += 7) g.lineTo(x, yAt(x));
+	for (let x = xa + step; x < xb; x += step) g.lineTo(x, yAt(x));
 	g.lineTo(xb, yAt(xb));
 	g.stroke();
 }
@@ -318,26 +319,27 @@ function drawOne(
 		const rise = sstep(0.66, BREAK.start, p);
 		const lw = (1 + 1.7 * bump(0.13, 0.33, p) + 1.3 * rise) * (r === 0 ? 1 : 0.55);
 		const jit = 0.7 + 1.4 * bump(0.13, 0.33, p) + 1.2 * rise;
-		const camp = shape.curve * (1 - 0.62 * clamp01(p)) * (0.7 + 0.3 * Math.sin(seed));
 		const cfrq = 0.75 + 0.55 * hash(seed + 2.2);
-		const cphs = seed * 0.7 + clock * 0.11;
-		const tl = tilt * (1 - 0.5 * clamp01(p));
 		const breaking = p >= BREAK.start;
 
 		for (const [q, [s0, s1]] of segments(shape.seg, Math.min(p, CREST_END), seed).entries()) {
 			const xa = s0 * w;
 			const xb = s1 * w;
-			/** 마루의 굽이·기울기·떨림 — 깊이(y)만 빼고. 거품도 이 모양을 물려받는다. */
-			const bend = (x: number): number => {
+			/**
+			 * 마루의 굽이·기울기·떨림 — 깊이(y)만 빼고, 일생 `pp` · 시각 `at`의 모양이다.
+			 * 거품은 제 자리가 터진 그 순간의 모양을 물려받아 굳힌다.
+			 */
+			const bend = (x: number, pp: number, at: number): number => {
 				const u = x / w;
+				const camp = shape.curve * (1 - 0.62 * clamp01(pp)) * (0.7 + 0.3 * Math.sin(seed));
 				return (
-					tl * (u - 0.5) +
-					camp * Math.sin(2 * Math.PI * (u * cfrq) + cphs) +
+					tilt * (1 - 0.5 * clamp01(pp)) * (u - 0.5) +
+					camp * Math.sin(2 * Math.PI * (u * cfrq) + seed * 0.7 + at * 0.11) +
 					(noise1(x * 0.021 + seed) - 0.5) * jit +
 					(noise1(x * 0.115 + seed * 2.3) - 0.5) * jit * 0.5
 				);
 			};
-			const yAt = (x: number): number => p * depth + bend(x);
+			const yAt = (x: number): number => p * depth + bend(x, p, clock);
 			/*
 			  토막 끝은 흐려서 사라진다 — 자른 자국이 보이면 종이를 오린 것처럼 된다.
 			  온 줄(solid)은 끝이 화면 밖이라 흐릴 게 없다.
@@ -348,11 +350,17 @@ function drawOne(
 			const since = (x: number) => p - breakAt(x / w, u0);
 			/** 거품이 얼마나 풀렸나 — 0 막 터짐 · 1 다 스러짐. */
 			const age = (x: number) => clamp01(since(x) / BREAK.settle);
-			/** 거품이 앉는 깊이 — 터진 자리에서 조금 밀려 나가다 멈춘다. 마루를 따라가지 않는다. */
+			/**
+			 * 거품이 앉는 깊이 — 터진 자리에서 조금 밀려 나가다 멈춘다. 마루를 따라가지 않고,
+			 * 모양도 터진 순간의 마루 그대로다(마루의 느린 굽이를 따라 일렁이지 않는다).
+			 */
 			const foamY = (x: number): number => {
-				const t = Math.max(0, since(x)) * TRAVEL;
+				const pb = breakAt(x / w, u0);
+				const t = Math.max(0, p - pb) * TRAVEL;
 				return (
-					breakAt(x / w, u0) * depth + bend(x) + BREAK.drift * (1 - Math.exp(-t / BREAK.driftTime))
+					pb * depth +
+					bend(x, pb, clock - t) +
+					BREAK.drift * (1 - Math.exp(-t / BREAK.driftTime))
 				);
 			};
 
@@ -403,29 +411,47 @@ function drawOne(
 					BREAK.curl * lip(x) * Math.abs(Math.sin(Math.PI * (x / 8.5 + 1.4 * noise1(x * 0.04 + seed)))),
 				(x) => fa * edge(x) * 0.85 * lip(x),
 				1,
+				// 물결무늬(폭 ~8.5)보다 성기게 찍으면 무늬가 톱니로 뭉개진다.
+				2,
 			);
 
-			// 거품 가닥 — 터진 자리에서 풀려나 앞으로 벌어진다. 붓이 마른 자리처럼 끊기고,
-			// 풀릴수록 성기고 옅어져 레이스처럼 오래 남는다.
+			/*
+			  거품 가닥 — 터진 자리에서 풀려나 앞으로 벌어진다. 붓이 마른 자리처럼 끊기고,
+			  한 토막씩 제 차례에 옅어져 사라진다 — 그래서 풀릴수록 성기고, 레이스처럼 오래 남는다.
+
+			  가닥의 모양(끊긴 자리 · 굽이)은 시각에 묶지 않는다. 시각에 묶으면 토막 끝이 찍는 칸을
+			  한 칸씩 건너뛰며 매 프레임 떨린다(붓 가운데 굵은 자리도 같이 튄다). 움직이는 건
+			  앞으로 벌어지는 것과 옅어지는 것뿐이다. 찍는 칸도 토막이 아니라 무대에 박아 둔다.
+			*/
+			const from = Math.ceil(xa / BREAK.step) * BREAK.step;
 			for (let j = 0; j < BREAK.strands; j += 1) {
 				const sj = seed * 1.3 + j * 17.7;
 				const lwj = j === 0 ? 0.8 : 1.6 - 0.2 * j;
 				const offset = (x: number, k: number) =>
 					(j === 0 ? -1.2 - 1.5 * k : (j - 0.4) * 1.4 + k * (2 + 3.2 * j)) +
-					(noise1(x * 0.17 + sj * 2 + clock * 0.18) - 0.5) * (1.6 + 3 * k);
+					(noise1(x * 0.17 + sj * 2) - 0.5) * (1.6 + 3 * k);
 				let piece: [number, number][] = [];
 				let alpha = 0;
 				let width = 0;
-				for (let x = xa; x <= xb + BREAK.step; x += BREAK.step) {
+				for (let x = from; x <= xb + BREAK.step; x += BREAK.step) {
 					const k = age(x);
 					const on =
 						x <= xb &&
 						since(x) >= 0 &&
 						k < 1 &&
-						noise1(x * 0.045 * (1 + 0.3 * j) + sj + clock * 0.2) > 0.26 + 0.46 * k + 0.05 * j;
+						noise1(x * 0.045 * (1 + 0.3 * j) + sj) > 0.44 + 0.05 * j;
 					if (on) {
 						if (piece.length === 0) {
-							alpha = clamp01(fa * edge(x) * (0.95 - 0.13 * j) * sstep(0, 0.03, k) * (1 - k) ** 1.2);
+							// 토막마다 사라질 차례가 다르다(k 0.35~1).
+							const last = 0.35 + 0.65 * hash(x * 0.37 + sj);
+							alpha = clamp01(
+								fa *
+									edge(x) *
+									(0.95 - 0.13 * j) *
+									sstep(0, 0.03, k) *
+									(1 - k) ** 0.8 *
+									clamp01((last - k) / 0.2),
+							);
 							width = lwj * (1 - 0.45 * k);
 						}
 						piece.push([x, foamY(x) + offset(x, k)]);
