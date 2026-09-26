@@ -1,0 +1,31 @@
+---
+/**
+ * 커피 레시피 목록(`/coffee`) — 레시피를 적어 둔 글만 모은 노트.
+ *
+ * 레시피는 원장이 아니라 글의 frontmatter(`recipe`)가 만든다. 좌표와 상관없는 화면이라
+ * 파생 데이터를 거치지 않고 콘텐츠를 바로 읽는다.
+ */
+import { getCollection } from 'astro:content';
+import BaseHead from '../components/BaseHead.astro';
+import CoffeeScreen from '../components/CoffeeScreen.astro';
+import { SITE_TITLE } from '../consts';
+import '../styles/stage.css';
+
+const entries = (await getCollection('blog'))
+	.flatMap((post) =>
+		post.data.recipe
+			? [{ slug: post.id, date: post.data.date.toISOString().slice(0, 10), recipe: post.data.recipe }]
+			: [],
+	)
+	.sort((a, b) => b.date.localeCompare(a.date));
+---
+
+<!doctype html>
+<html lang="ko">
+	<head>
+		<BaseHead title={`레시피 — ${SITE_TITLE}`} description={`커피 레시피 ${entries.length}장.`} />
+	</head>
+	<body class="list-page">
+		<CoffeeScreen entries={entries} />
+	</body>
+</html>

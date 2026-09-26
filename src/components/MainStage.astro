@@ -47,7 +47,7 @@ const constellations = Object.entries(seriesData.series).flatMap(([name, members
 	const nodes = members
 		.map((member) => ({ ...member, post: bySlug.get(member.slug) }))
 		.filter((node) => node.post !== undefined)
-		.map((node) => ({ episode: node.episode, x: node.post!.x, y: node.post!.y }));
+		.map((node) => ({ slug: node.slug, episode: node.episode, x: node.post!.x, y: node.post!.y }));
 	if (nodes.length === 0) return [];
 
 	// 원형 평균 — 별자리가 호 경계를 넘어가도 색이 반대편으로 튀지 않는다.
@@ -592,7 +592,14 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 					/>
 					{series.nodes.map((node) => (
 						<>
-							<circle class="series-node" cx={node.x.toFixed(1)} cy={node.y.toFixed(1)} fill={series.color} />
+							{/* 시리즈에 든 글은 이 점이 곧 제 점이다 — 커서가 오면 제 점 대신 이 점이 밝아진다(main-stage.ts). */}
+							<circle
+								class="series-node"
+								data-slug={node.slug}
+								cx={node.x.toFixed(1)}
+								cy={node.y.toFixed(1)}
+								fill={series.color}
+							/>
 							<text
 								class="series-episode"
 								x={(node.x + 8).toFixed(1)}
@@ -1104,7 +1111,12 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		pointer-events: all;
 	}
 
-	/* 별자리 — 평시엔 희미하게, 호버하면 점등(SeriesMain.dc.html 정본). */
+	/*
+	  별자리 — 평시엔 숨고, 커서가 오면 글 점처럼 켜진다. 정본(SeriesMain.dc.html)은 평시에도
+	  희미하게 띄웠지만 걷었다(2026-09-26) — 시리즈만 늘 떠 있을 까닭이 없다.
+	  밝기는 main-stage.ts가 매 프레임 준다: 별자리 전체는 --glow(가장 밝은 회차) · --label,
+	  점 하나하나는 --node-glow(제 글의 밝기). 호버·포커스는 그 위에서 끝까지 켠다.
+	*/
 	.series {
 		cursor: pointer;
 	}
@@ -1114,31 +1126,23 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 	}
 
 	.series-line {
-		opacity: 0.16;
+		opacity: calc(var(--glow, 0) * 0.6);
 	}
 
+	/* 글 점과 같은 식이다(r = 1.6 + 3.4·밝기, 불투명도 = 밝기 × 1.15). */
 	.series-node {
-		r: 2;
-		opacity: 0.35;
+		r: calc(1.6px + 3.4px * var(--node-glow, 0));
+		opacity: min(1, calc(var(--node-glow, 0) * 1.15));
 	}
 
 	.series-name {
-		opacity: 0.45;
+		opacity: var(--label, 0);
 	}
 
 	.series-episode,
 	.series-caption {
 		opacity: 0;
-	}
-
-	.series-line,
-	.series-node,
-	.series-name,
-	.series-episode,
-	.series-caption {
-		transition:
-			opacity 0.18s ease,
-			r 0.18s ease;
+		transition: opacity 0.18s ease;
 	}
 
 	.series:hover .series-line,
@@ -1146,9 +1150,8 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		opacity: 0.6;
 	}
 
-	.series:hover .series-node,
 	.series:focus-visible .series-node {
-		r: 3;
+		r: 3px;
 		opacity: 0.95;
 	}
 
@@ -1217,9 +1220,6 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 	@media (prefers-reduced-motion: reduce) {
 		#alumni-col,
 		#tree-label,
-		.series-line,
-		.series-node,
-		.series-name,
 		.series-episode,
 		.series-caption {
 			transition: none;

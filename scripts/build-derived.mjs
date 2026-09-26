@@ -15,6 +15,7 @@ import {
 	DISCOVERY_LIMIT,
 	D_MAX,
 	EMBED_VERSION,
+	NEIGHBOR_FLOOR,
 	NEIGHBOR_LIMIT,
 } from '../src/lib/coords/constants.ts';
 import { constellations, discoveryMap, groupByCategory, neighborMap } from '../src/lib/coords/derive.ts';
@@ -100,7 +101,8 @@ await Promise.all([
 	// 글 화면 "가까운 글" — 빌드 시 고정, 클릭마다 재계산하지 않는다.
 	writeJson(path.join(GENERATED_DIR, 'neighbors.json'), {
 		...meta,
-		neighbors: neighborMap(placed, NEIGHBOR_LIMIT),
+		neighborFloor: NEIGHBOR_FLOOR,
+		neighbors: neighborMap(placed, NEIGHBOR_LIMIT, NEIGHBOR_FLOOR),
 	}),
 	// 글 화면 "다른 자리에서 닮은 글" — 화면 거리가 아니라 임베딩이 잇는다.
 	writeJson(path.join(GENERATED_DIR, 'discoveries.json'), {

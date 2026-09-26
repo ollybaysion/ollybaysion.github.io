@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DISCOVERY_FLOOR, D_MAX, VECTOR_CEIL, VECTOR_FLOOR } from '../../src/lib/coords/constants.ts';
+import {
+	DISCOVERY_FLOOR,
+	D_MAX,
+	NEIGHBOR_FLOOR,
+	NEIGHBOR_LIMIT,
+	VECTOR_CEIL,
+	VECTOR_FLOOR,
+} from '../../src/lib/coords/constants.ts';
 import {
 	constellations,
 	discoveriesOf,
@@ -35,11 +42,40 @@ describe('neighborsOf', () => {
 	];
 
 	it('자기 자신은 빼고 거리순으로 준다', () => {
-		const found = neighborsOf(all[0]!, all);
+		const found = neighborsOf(all[0]!, all, NEIGHBOR_LIMIT, 0);
 		assert.deepEqual(
 			found.map((n) => n.slug),
 			['바로-옆', '조금-멀리', '반대편'],
 		);
+	});
+
+	it('근접도가 문턱 아래인 글은 편수가 남아도 싣지 않는다 — 무대 반대편은 빠진다', () => {
+		const found = neighborsOf(all[0]!, all);
+		assert.deepEqual(
+			found.map((n) => n.slug),
+			['바로-옆', '조금-멀리'],
+		);
+		assert.ok(found.every((n) => n.proximity >= NEIGHBOR_FLOOR));
+	});
+
+	it('문턱은 근접도 그 자리까지 싣는다 — 경계값 포함', () => {
+		const d = screenDistance(all[0]!, all[2]!);
+		const exact = Math.max(0, 1 - d / D_MAX);
+		assert.deepEqual(
+			neighborsOf(all[0]!, all, NEIGHBOR_LIMIT, exact).map((n) => n.slug),
+			['바로-옆', '조금-멀리'],
+		);
+		assert.deepEqual(
+			neighborsOf(all[0]!, all, NEIGHBOR_LIMIT, exact + 1e-9).map((n) => n.slug),
+			['바로-옆'],
+		);
+	});
+
+	it('0.35 = 나이테 가운데(r=170)에서 약 96° — 그 안쪽은 싣고 바깥은 뺀다', () => {
+		const at95 = [entry('기준', 270, 170), entry('95도', 175, 170)];
+		const at98 = [entry('기준', 270, 170), entry('98도', 172, 170)];
+		assert.equal(neighborsOf(at95[0]!, at95).length, 1);
+		assert.equal(neighborsOf(at98[0]!, at98).length, 0);
 	});
 
 	it('근접도는 거리에서 파생된다 (max(0, 1 - d/D_MAX))', () => {

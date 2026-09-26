@@ -128,6 +128,11 @@ interface Post {
   label: SVGTextElement | null;
   /** 은하수 구성원이면 그 은하수. 누르면 글이 아니라 목록이 열린다. */
   galaxy: Galaxy | null;
+  /**
+   * 시리즈에 든 글이면 별자리의 그 점. 이 점이 곧 제 점이라 제 점은 그리지 않고,
+   * 커서에 끌려오지도 않는다 — 별자리 선이 이 자리를 잇고 있다.
+   */
+  node: SVGCircleElement | null;
   /** 이번 프레임의 밝기 — 은하수가 구성원 중 가장 밝은 값을 받는다. */
   glow: number;
 }
@@ -167,6 +172,8 @@ function pulled(
   const dx = cx - post.x;
   const dy = cy - post.y;
   const dist = Math.max(1, Math.hypot(dx, dy));
+  // 별자리 점은 선에 꿰여 있다 — 끌려오면 선에서 떨어져 나간다.
+  if (post.node) return { x: post.x, y: post.y, dist };
   const pull = Math.exp(-((dist / PULL_SIGMA) ** 2)) * PULL_MAX * op;
   return {
     x: post.x + (dx / dist) * pull,
@@ -194,11 +201,23 @@ function start(svg: SVGSVGElement): void {
         dot: g.querySelector("circle")!,
         label: g.querySelector("text"),
         galaxy: null,
+        node: null,
         glow: 0,
       };
     },
   );
   const postBySlug = new Map(posts.map((post) => [post.slug, post]));
+  /** 별자리 — 선·이름은 회차 중 가장 밝은 글만큼 켜진다. */
+  const constellations = [...svg.querySelectorAll<SVGAElement>(".series")].map((link) => {
+    const members: Post[] = [];
+    for (const node of link.querySelectorAll<SVGCircleElement>(".series-node[data-slug]")) {
+      const post = postBySlug.get(node.dataset.slug ?? "");
+      if (!post) continue;
+      post.node = node;
+      members.push(post);
+    }
+    return { link, members };
+  });
   const galaxies: Galaxy[] = [
     ...svg.querySelectorAll<SVGGElement>(".galaxy"),
   ].map((g) => {
@@ -601,6 +620,12 @@ function start(svg: SVGSVGElement): void {
       return;
     }
 
+    // 별자리는 제 링크(시리즈 목록)가 받는다. 여기서 글로 보내면 곧이어 오는 링크의 click과
+    // 두 이동이 겨루게 된다 — 어느 쪽이 이길지 브라우저마다 다르다.
+    if ((e.target as Element | null)?.closest?.(".series")) {
+      return;
+    }
+
     if (panelState.open) {
       const panelTop = PANEL_TOP + panelState.y + panelLift;
       if (point.y > panelTop) {
@@ -805,13 +830,32 @@ function start(svg: SVGSVGElement): void {
       post.dot.setAttribute("cx", at.x.toFixed(1));
       post.dot.setAttribute("cy", at.y.toFixed(1));
       post.dot.setAttribute("r", (1.6 + 3.4 * glow).toFixed(2));
-      post.dot.setAttribute("opacity", Math.min(1, glow * 1.15).toFixed(2));
+      if (post.node) {
+        // 시리즈 글 — 제 점은 숨고 별자리 점이 제자리에서 같은 식으로 밝아진다(MainStage CSS).
+        post.dot.setAttribute("opacity", "0");
+        post.node.style.setProperty("--node-glow", glow.toFixed(3));
+      } else {
+        post.dot.setAttribute("opacity", Math.min(1, glow * 1.15).toFixed(2));
+      }
       post.label?.setAttribute(
         "opacity",
         TOUCH ? "0" : Math.max(0, (glow - 0.4) * 1.9).toFixed(2),
       );
     }
     svg.classList.toggle("on-post", onPost);
+
+    // 별자리 — 평시엔 숨어 있다가 회차 중 가장 밝은 글만큼 선과 이름이 켜진다.
+    // 이름표는 글 이름표와 같은 문턱을 넘어야 뜨고, 손가락 화면에서는 뜨지 않는다.
+    for (const { link, members } of constellations) {
+      const glow = members.reduce((max, member) => Math.max(max, member.glow), 0);
+      // 손가락 화면에서 점이 늘 켜 둔 몫(DOT_REST)은 빼고 잰다 — 선까지 늘 켜 두면 시리즈만 도드라진다.
+      const lit = TOUCH ? Math.max(0, (glow - DOT_REST) / (1 - DOT_REST)) : glow;
+      link.style.setProperty("--glow", lit.toFixed(3));
+      link.style.setProperty(
+        "--label",
+        TOUCH ? "0" : Math.min(1, Math.max(0, (glow - 0.4) * 1.9)).toFixed(3),
+      );
+    }
 
     // 은하수 — 가장 밝은 별만큼 밝고, 안개는 끌려온 별들의 한가운데를 따라간다.
     for (const galaxy of galaxies) {
