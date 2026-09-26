@@ -6,11 +6,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { meanAngle, norm360 } from "../../src/lib/coords/arc.ts";
 import { circleTitle } from "../../src/lib/stage/list.ts";
+import { NARROW, WIDE } from "../../src/lib/stage/page.ts";
 import {
   FIRST_NODE_Y,
   NODE_METRICS,
   NODE_STRIDE,
   seriesLayout,
+  seriesMetrics,
   seriesSubtitle,
 } from "../../src/lib/stage/series.ts";
 
@@ -74,6 +76,30 @@ describe("seriesLayout", () => {
     assert.equal(NODE_METRICS.episodeX, 68);
     assert.equal(NODE_METRICS.textX, 108);
     assert.equal(NODE_METRICS.r, 4);
+  });
+});
+
+describe("seriesLayout — 좁은 판", () => {
+  const narrow = seriesLayout(4, NARROW);
+  const node = seriesMetrics(NARROW);
+
+  it("세로 리듬은 판이 달라도 정본 그대로다", () => {
+    assert.deepEqual(narrow.nodes, seriesLayout(4, WIDE).nodes);
+    assert.equal(narrow.height, 520);
+  });
+
+  it("선과 점이 좁은 판의 왼쪽 여백 곁으로 당겨진다", () => {
+    assert.ok(node.x > NARROW.edgeL, `x=${node.x}`);
+    assert.ok(node.x < seriesMetrics(WIDE).x, `x=${node.x}`);
+    assert.equal(narrow.line, "M44.0,231.0 L44.0,297.0 L44.0,363.0 L44.0,429.0");
+  });
+
+  it("글줄은 선에서 정본과 같은 거리에 앉고 읽는 열 안에 남는다", () => {
+    const wide = seriesMetrics(WIDE);
+    assert.equal(node.textX - node.x, wide.textX - wide.x);
+    assert.ok(node.textX < NARROW.edgeR, `textX=${node.textX}`);
+    // 회차 번호는 선과 글줄 사이가 아니라 선 왼쪽에 있다.
+    assert.ok(node.episodeX < node.x, `episodeX=${node.episodeX}`);
   });
 });
 

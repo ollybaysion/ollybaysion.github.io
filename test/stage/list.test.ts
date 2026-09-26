@@ -7,8 +7,10 @@ import { describe, it } from "node:test";
 import {
   circleTitle,
   listLayout,
+  listWraps,
   thumbScene,
 } from "../../src/lib/stage/list.ts";
+import { NARROW, WIDE } from "../../src/lib/stage/page.ts";
 
 const fx = (n: number) => Number(n.toFixed(4));
 
@@ -54,9 +56,10 @@ describe("listLayout — 정본 재현", () => {
       rows.rows.map((row) => row.dot),
       [716, 772, 828, 884, 940],
     );
+    // 넓은 판의 제목은 한 줄이다.
     assert.deepEqual(
       rows.rows.map((row) => row.title),
-      [721, 777, 833, 889, 945],
+      [[721], [777], [833], [889], [945]],
     );
     assert.deepEqual(
       rows.rows.map((row) => row.meta),
@@ -98,6 +101,64 @@ describe("listLayout — 글이 적은 카테고리", () => {
       layout.rows!.rows.map((row) => row.dot),
       [464, 520],
     );
+  });
+});
+
+describe("listLayout — 좁은 판", () => {
+  const NARROW_LAYOUT = listLayout({ latest: 1, featured: 2, rows: 5 }, NARROW);
+
+  it("최근 1편은 썸네일 아래에 글이 쌓인다", () => {
+    const latest = NARROW_LAYOUT.latest!;
+    assert.deepEqual(latest.thumb, { x: 24, y: 199, w: 342, h: 208 });
+    // 글은 썸네일 왼쪽 끝에서 시작해 아래로 내려간다.
+    assert.equal(latest.textX, 24);
+    assert.ok(latest.title[0]! > latest.thumb.y + latest.thumb.h);
+    // 손이 닿는 자리는 썸네일과 글을 한 덩어리로 받는다.
+    assert.equal(latest.hit.w, 342);
+    assert.ok(latest.hit.y + latest.hit.h >= latest.desc.at(-1)!);
+  });
+
+  it("주요 2편이 한 열에 위아래로 쌓인다", () => {
+    const cards = NARROW_LAYOUT.featured!.cards;
+    assert.equal(cards.length, 2);
+    assert.deepEqual(
+      cards.map((card) => card.thumb.x),
+      [24, 24],
+    );
+    assert.equal(cards[1]!.thumb.y - cards[0]!.thumb.y, 235);
+    // 앞 카드의 날짜가 뒤 카드의 썸네일을 넘지 않는다.
+    assert.ok(cards[0]!.date < cards[1]!.thumb.y);
+  });
+
+  it("전체 행의 제목이 두 줄까지 간다", () => {
+    const rows = NARROW_LAYOUT.rows!;
+    assert.equal(rows.rows[0]!.title.length, 2);
+    // 줄이 늘어난 만큼 행 사이도 벌어진다 — 구분선이 제 행의 메타와 다음 행 제목 사이에 온다.
+    assert.ok(rows.rows[0]!.meta > rows.rows[0]!.title.at(-1)!);
+    assert.ok(rows.rows[0]!.rule > rows.rows[0]!.meta);
+    assert.ok(rows.rows[0]!.rule < rows.rows[1]!.title[0]!);
+    // 행끼리 손닿는 자리가 겹치지 않는다.
+    assert.ok(rows.rows[0]!.hit.y + rows.rows[0]!.hit.h <= rows.rows[1]!.hit.y);
+  });
+
+  it("어느 단도 글줄 폭을 넘지 않는다", () => {
+    const wraps = listWraps(NARROW);
+    assert.ok(wraps.latestText <= NARROW.edgeR - NARROW.edgeL);
+    assert.ok(wraps.featuredText <= NARROW.edgeR - NARROW.edgeL);
+    assert.ok(wraps.rowTitle > 0);
+    assert.equal(wraps.rowTitleLines, 2);
+    for (const card of NARROW_LAYOUT.featured!.cards) {
+      assert.ok(card.thumb.x + card.thumb.w <= NARROW.edgeR);
+    }
+  });
+
+  it("넓은 판의 접는 폭은 정본 그대로다", () => {
+    assert.deepEqual(listWraps(WIDE), {
+      latestText: 292,
+      featuredText: 286,
+      rowTitle: 522,
+      rowTitleLines: 1,
+    });
   });
 });
 
