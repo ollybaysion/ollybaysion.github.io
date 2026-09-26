@@ -66,6 +66,7 @@ const neighbors = (neighborsData.neighbors[slug] ?? [])
 			{
 				slug: near.slug,
 				title: truncateText(entry.title, 13.5, EDGE_R - 76 - 52),
+				full: entry.title,
 				color: angleColor(entry.angle),
 				percent: Math.round(near.proximity * 100),
 			},
@@ -88,6 +89,7 @@ const discoveries = (discoveriesData.discoveries[slug] ?? []).flatMap((found) =>
 		{
 			slug: found.slug,
 			title: truncateText(entry.title, 13.5, EDGE_R - 76 - 64),
+			full: entry.title,
 			category: entry.category,
 			color: angleColor(entry.angle),
 		},
@@ -132,6 +134,9 @@ const strip =
 const SEA_SQUASH = TAIL_METRICS.sea / SEA_DEPTH;
 
 const category = categoriesData.categories[post.category];
+const listHref = `/list/${encodeURIComponent(post.category)}/`;
+/** 길잡이에 실리는 관련 글 — 꼬리와 같은 목록이다. */
+const related = neighbors.length + discoveries.length;
 const n = (value: number) => Number(value.toFixed(2));
 const dot = minimapDot(post);
 ---
@@ -566,9 +571,93 @@ const dot = minimapDot(post);
 	</svg>
 
 	<nav class="post-index" aria-label="이 글의 자리">
-		<a href={`/list/${encodeURIComponent(post.category)}/`}>{post.category} 목록 ({category?.count ?? 0}편)</a>
+		<a href={listHref}>{post.category} 목록 ({category?.count ?? 0}편)</a>
 	</nav>
 </article>
+
+{/*
+  길잡이 — 목차와 관련 글. 본문 옆이 넉넉하면 기둥 오른쪽에 서서 따라 내려오고,
+  모자라면 오른쪽 아래 알약으로 접힌다. 자리는 post-nav.ts가 잡는다.
+
+  article 밖에 두는 건 zoom을 안 먹게 하려고다 — 화면에 붙어 서는 것은 화면 px로 선다.
+  목차는 본문 제목에서 스크립트가 만드니, 스크립트가 없으면 통째로 숨고 관련 글은 꼬리에 그대로 있다.
+*/}
+<aside class="pnav" data-post-nav hidden aria-label="이 글 길잡이" style={`--post-accent: ${accent};`}>
+	<div class="pnav-panel" id="pnav-panel" data-panel>
+		<section class="pnav-toc" data-toc hidden>
+			<div class="pnav-head">
+				<span class="pnav-label">목차</span>
+				<span class="pnav-pct mono" data-progress-text>0%</span>
+			</div>
+			<div class="pnav-track"><div class="pnav-bar" data-progress></div></div>
+			<ol class="pnav-list" data-toc-list></ol>
+		</section>
+		{
+			related > 0 && (
+				<section class="pnav-rel">
+					<button
+						type="button"
+						class="pnav-toggle"
+						data-rel-toggle
+						aria-expanded="false"
+						aria-controls="pnav-rel"
+					>
+						<span class="pnav-label">관련 글</span>
+						<span class="pnav-count mono">{related}</span>
+						<span class="pnav-chev" aria-hidden="true" />
+					</button>
+					<div class="pnav-rel-body" id="pnav-rel" hidden>
+						{neighbors.length > 0 && (
+							<>
+								<p class="pnav-sub">가까운 글 · 좌표 기준</p>
+								<ul class="pnav-links">
+									{neighbors.map((near) => (
+										<li>
+											<a href={`/blog/${near.slug}/`}>
+												<i class="pnav-dot" style={`--c: ${near.color};`} />
+												<span class="pnav-t">{near.full}</span>
+												<span class="pnav-meta mono">{`${near.percent}%`}</span>
+											</a>
+										</li>
+									))}
+								</ul>
+							</>
+						)}
+						{discoveries.length > 0 && (
+							<>
+								<p class="pnav-sub">다른 자리에서 닮은 글</p>
+								<ul class="pnav-links">
+									{discoveries.map((found) => (
+										<li>
+											<a href={`/blog/${found.slug}/`}>
+												<i class="pnav-dot is-hollow" style={`--c: ${found.color};`} />
+												<span class="pnav-t">{found.full}</span>
+												<span class="pnav-meta">{found.category}</span>
+											</a>
+										</li>
+									))}
+								</ul>
+							</>
+						)}
+					</div>
+				</section>
+			)
+		}
+		<a class="pnav-all" href={listHref}>{`${post.category} 목록 · ${category?.count ?? 0}편 →`}</a>
+	</div>
+	<button
+		type="button"
+		class="pnav-pill"
+		data-pill
+		data-related={related}
+		aria-controls="pnav-panel"
+		aria-expanded="false"
+	>
+		<span class="pnav-pill-label" data-pill-label>목차</span>
+		<span class="pnav-pill-now" data-pill-now></span>
+		<span class="pnav-pill-count mono" data-pill-count></span>
+	</button>
+</aside>
 
 <style>
 	/*
@@ -642,6 +731,12 @@ const dot = minimapDot(post);
 
 	.body :global(p) {
 		margin: 0 0 26px 0;
+	}
+
+	/* 목차에서 눌러 왔을 때 제목이 화면 끝에 붙지 않게. */
+	.body :global(h2),
+	.body :global(h3) {
+		scroll-margin-top: 28px;
 	}
 
 	.body :global(h2) {
@@ -798,9 +893,324 @@ const dot = minimapDot(post);
 		white-space: nowrap;
 	}
 
+	/*
+	  길잡이. 모습은 둘 — `rail`(기둥 오른쪽에 선다)과 `sheet`(알약 + 누르면 올라오는 판).
+	  목차 줄은 스크립트가 만드는 요소라 스코프 밖이다 — :global로 잡는다.
+	*/
+	.pnav {
+		position: fixed;
+		z-index: 20;
+		font-family: var(--stage-sans);
+		color: var(--stage-muted);
+	}
+
+	.pnav[hidden],
+	.pnav [hidden] {
+		display: none !important;
+	}
+
+	.pnav[data-mode='rail'] {
+		top: var(--pnav-top, 88px);
+		left: var(--pnav-left, auto);
+		width: var(--pnav-width, 220px);
+	}
+
+	/* 판이 목차 줄의 offsetParent다 — 지금 제목을 판 안에 보이게 굴릴 때 그 자리를 쓴다. */
+	.pnav-panel {
+		position: relative;
+	}
+
+	.pnav[data-mode='rail'] .pnav-panel {
+		max-height: calc(100vh - var(--pnav-top, 88px) - 24px);
+		overflow-y: auto;
+		scrollbar-width: none;
+	}
+
+	.pnav[data-mode='rail'] .pnav-pill {
+		display: none;
+	}
+
+	.pnav[data-mode='sheet'] {
+		right: 16px;
+		bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+		left: 16px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 10px;
+		pointer-events: none;
+	}
+
+	.pnav[data-mode='sheet'] > * {
+		pointer-events: auto;
+	}
+
+	.pnav[data-mode='sheet'] .pnav-panel {
+		display: none;
+		box-sizing: border-box;
+		width: min(100%, 360px);
+		max-height: min(62vh, 520px);
+		overflow-y: auto;
+		padding: 18px 20px 16px;
+		border: 1px solid #2a2a30;
+		border-radius: 10px;
+		background: #17171b;
+		box-shadow: 0 18px 44px rgb(0 0 0 / 55%);
+	}
+
+	.pnav[data-mode='sheet'][data-open] .pnav-panel {
+		display: block;
+	}
+
+	.pnav-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+	}
+
+	.pnav-label {
+		font-size: 10.5px;
+		letter-spacing: 3px;
+		color: var(--stage-muted);
+	}
+
+	.pnav .mono {
+		font-family: var(--stage-mono);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.pnav-pct {
+		font-size: 10.5px;
+	}
+
+	.pnav-track {
+		height: 1px;
+		margin: 9px 0 10px;
+		background: #2a2a30;
+	}
+
+	.pnav-bar {
+		width: 0;
+		height: 100%;
+		background: var(--post-accent);
+	}
+
+	.pnav-list {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		border-left: 1px solid #2a2a30;
+	}
+
+	.pnav-list :global(a) {
+		display: block;
+		margin-left: -1px;
+		padding: 5px 0 5px 12px;
+		border-left: 2px solid transparent;
+		font-size: 12.5px;
+		line-height: 1.45;
+		color: #7d7a74;
+		transition:
+			color 0.18s ease,
+			border-color 0.18s ease;
+	}
+
+	.pnav-list :global(.lvl-3 a) {
+		padding-left: 24px;
+		font-size: 12px;
+	}
+
+	.pnav-list :global(a:hover),
+	.pnav-list :global(a:focus-visible) {
+		color: var(--stage-ink-dim);
+	}
+
+	.pnav-list :global(.is-on a) {
+		border-left-color: var(--post-accent);
+		color: var(--stage-ink);
+	}
+
+	.pnav-rel {
+		margin-top: 22px;
+	}
+
+	.pnav-toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		padding: 2px 0;
+		border: 0;
+		background: none;
+		font: inherit;
+		color: inherit;
+		cursor: pointer;
+	}
+
+	.pnav-count {
+		padding: 0 6px;
+		border: 1px solid #2a2a30;
+		border-radius: 9px;
+		font-size: 10.5px;
+		line-height: 16px;
+		color: var(--stage-ink-dim);
+	}
+
+	.pnav-chev {
+		width: 6px;
+		height: 6px;
+		margin-right: 3px;
+		margin-left: auto;
+		border-right: 1px solid currentColor;
+		border-bottom: 1px solid currentColor;
+		transform: translateY(-2px) rotate(45deg);
+		transition: transform 0.18s ease;
+	}
+
+	.pnav-toggle[aria-expanded='true'] .pnav-chev {
+		transform: translateY(1px) rotate(-135deg);
+	}
+
+	.pnav-toggle:hover .pnav-label,
+	.pnav-toggle:focus-visible .pnav-label {
+		color: var(--stage-ink-dim);
+	}
+
+	.pnav-rel-body {
+		margin-top: 12px;
+	}
+
+	.pnav-sub {
+		margin: 0 0 4px;
+		font-size: 10.5px;
+		color: #6f6c66;
+	}
+
+	.pnav-links {
+		margin: 0 0 12px;
+		padding: 0;
+		list-style: none;
+	}
+
+	.pnav-links a {
+		display: grid;
+		grid-template-columns: 6px 1fr auto;
+		gap: 10px;
+		align-items: baseline;
+		padding: 5px 0;
+		font-size: 12.5px;
+		line-height: 1.45;
+		color: var(--stage-ink-dim);
+		transition: color 0.18s ease;
+	}
+
+	.pnav-links a:hover,
+	.pnav-links a:focus-visible {
+		color: #ffffff;
+	}
+
+	.pnav-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--c);
+		transform: translateY(-1px);
+	}
+
+	.pnav-dot.is-hollow {
+		background: none;
+		box-shadow: inset 0 0 0 1.5px var(--c);
+	}
+
+	.pnav-t {
+		display: -webkit-box;
+		overflow: hidden;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+	}
+
+	.pnav-meta {
+		font-size: 10.5px;
+		color: var(--stage-muted);
+	}
+
+	.pnav-all {
+		display: inline-block;
+		margin-top: 16px;
+		font-size: 11.5px;
+		color: var(--stage-muted);
+		transition: color 0.18s ease;
+	}
+
+	.pnav-all:hover,
+	.pnav-all:focus-visible {
+		color: var(--stage-ink);
+	}
+
+	.pnav-pill {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		max-width: min(100%, 360px);
+		height: 40px;
+		padding: 0 16px;
+		overflow: hidden;
+		border: 1px solid #2a2a30;
+		border-radius: 20px;
+		background: rgb(23 23 27 / 92%);
+		backdrop-filter: blur(6px);
+		font: inherit;
+		font-size: 12.5px;
+		color: var(--stage-ink-dim);
+		cursor: pointer;
+	}
+
+	/* 알약 밑줄이 곧 읽은 만큼이다. */
+	.pnav-pill::after {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		width: var(--read, 0%);
+		height: 2px;
+		background: var(--post-accent);
+		content: '';
+	}
+
+	.pnav-pill-label {
+		flex: none;
+		font-size: 10.5px;
+		letter-spacing: 2px;
+		color: var(--stage-muted);
+	}
+
+	.pnav-pill-now {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.pnav-pill-count {
+		flex: none;
+		font-size: 10.5px;
+		color: var(--stage-muted);
+	}
+
+	.pnav-toggle:focus-visible,
+	.pnav-pill:focus-visible,
+	.pnav a:focus-visible {
+		outline: 1px solid var(--post-accent);
+		outline-offset: 3px;
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.bleed-svg a text,
-		.strip {
+		.strip,
+		.pnav-list :global(a),
+		.pnav-chev,
+		.pnav-links a,
+		.pnav-all {
 			transition: none;
 		}
 	}
@@ -808,4 +1218,6 @@ const dot = minimapDot(post);
 
 <script>
 	import '../scripts/post-screen.ts';
+	import '../scripts/post-nav.ts';
 </script>
+
