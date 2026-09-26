@@ -576,8 +576,9 @@ const dot = minimapDot(post);
 </article>
 
 {/*
-  길잡이 — 목차와 관련 글. 본문 옆이 넉넉하면 기둥 오른쪽에 서서 따라 내려오고,
-  모자라면 오른쪽 아래 알약으로 접힌다. 자리는 post-nav.ts가 잡는다.
+  길잡이 — 목차와 관련 글. 본문 옆이 넉넉하면 둘이 기둥 양옆에 갈라 선다(목차 오른쪽,
+  관련 글 왼쪽)고 스크롤을 따라 내려오고, 모자라면 오른쪽 아래 알약 하나로 접혀 누르면
+  한 판에 둘 다 올라온다. 자리는 post-nav.ts가 잡는다.
 
   article 밖에 두는 건 zoom을 안 먹게 하려고다 — 화면에 붙어 서는 것은 화면 px로 선다.
   목차는 본문 제목에서 스크립트가 만드니, 스크립트가 없으면 통째로 숨고 관련 글은 꼬리에 그대로 있다.
@@ -592,58 +593,47 @@ const dot = minimapDot(post);
 			<div class="pnav-track"><div class="pnav-bar" data-progress></div></div>
 			<ol class="pnav-list" data-toc-list></ol>
 		</section>
-		{
-			related > 0 && (
-				<section class="pnav-rel">
-					<button
-						type="button"
-						class="pnav-toggle"
-						data-rel-toggle
-						aria-expanded="false"
-						aria-controls="pnav-rel"
-					>
-						<span class="pnav-label">관련 글</span>
-						<span class="pnav-count mono">{related}</span>
-						<span class="pnav-chev" aria-hidden="true" />
-					</button>
-					<div class="pnav-rel-body" id="pnav-rel" hidden>
-						{neighbors.length > 0 && (
-							<>
-								<p class="pnav-sub">가까운 글 · 좌표 기준</p>
-								<ul class="pnav-links">
-									{neighbors.map((near) => (
-										<li>
-											<a href={`/blog/${near.slug}/`}>
-												<i class="pnav-dot" style={`--c: ${near.color};`} />
-												<span class="pnav-t">{near.full}</span>
-												<span class="pnav-meta mono">{`${near.percent}%`}</span>
-											</a>
-										</li>
-									))}
-								</ul>
-							</>
-						)}
-						{discoveries.length > 0 && (
-							<>
-								<p class="pnav-sub">다른 자리에서 닮은 글</p>
-								<ul class="pnav-links">
-									{discoveries.map((found) => (
-										<li>
-											<a href={`/blog/${found.slug}/`}>
-												<i class="pnav-dot is-hollow" style={`--c: ${found.color};`} />
-												<span class="pnav-t">{found.full}</span>
-												<span class="pnav-meta">{found.category}</span>
-											</a>
-										</li>
-									))}
-								</ul>
-							</>
-						)}
-					</div>
-				</section>
-			)
-		}
-		<a class="pnav-all" href={listHref}>{`${post.category} 목록 · ${category?.count ?? 0}편 →`}</a>
+		<section class="pnav-rel" data-rel>
+			<div class="pnav-head">
+				<span class="pnav-label">관련 글</span>
+				<span class="pnav-pct mono">{`${related}편`}</span>
+			</div>
+			<div class="pnav-track"></div>
+			{neighbors.length > 0 && (
+				<>
+					<p class="pnav-sub">가까운 글 · 좌표 기준</p>
+					<ul class="pnav-links">
+						{neighbors.map((near) => (
+							<li>
+								<a href={`/blog/${near.slug}/`}>
+									<i class="pnav-dot" style={`--c: ${near.color};`} />
+									<span class="pnav-t">{near.full}</span>
+									<span class="pnav-meta mono">{`${near.percent}%`}</span>
+								</a>
+							</li>
+						))}
+					</ul>
+				</>
+			)}
+			{discoveries.length > 0 && (
+				<>
+					<p class="pnav-sub">다른 자리에서 닮은 글</p>
+					<ul class="pnav-links">
+						{discoveries.map((found) => (
+							<li>
+								<a href={`/blog/${found.slug}/`}>
+									<i class="pnav-dot is-hollow" style={`--c: ${found.color};`} />
+									<span class="pnav-t">{found.full}</span>
+									<span class="pnav-meta">{found.category}</span>
+								</a>
+							</li>
+						))}
+					</ul>
+				</>
+			)}
+			{related === 0 && <p class="pnav-sub">아직 곁에 앉은 글이 없다.</p>}
+			<a class="pnav-all" href={listHref}>{`${post.category} 목록 · ${category?.count ?? 0}편 →`}</a>
+		</section>
 	</div>
 	<button
 		type="button"
@@ -894,7 +884,8 @@ const dot = minimapDot(post);
 	}
 
 	/*
-	  길잡이. 모습은 둘 — `rail`(기둥 오른쪽에 선다)과 `sheet`(알약 + 누르면 올라오는 판).
+	  길잡이. 모습은 둘 — `rail`(목차는 기둥 오른쪽, 관련 글은 왼쪽에 따로 선다)과
+	  `sheet`(알약 + 누르면 둘이 한 판에 올라온다).
 	  목차 줄은 스크립트가 만드는 요소라 스코프 밖이다 — :global로 잡는다.
 	*/
 	.pnav {
@@ -909,21 +900,34 @@ const dot = minimapDot(post);
 		display: none !important;
 	}
 
-	.pnav[data-mode='rail'] {
-		top: var(--pnav-top, 88px);
-		left: var(--pnav-left, auto);
-		width: var(--pnav-width, 220px);
-	}
-
-	/* 판이 목차 줄의 offsetParent다 — 지금 제목을 판 안에 보이게 굴릴 때 그 자리를 쓴다. */
+	/* 판 안의 목차 줄이 판을 기준으로 자리를 잰다(offsetParent) — 지금 제목을 보이게 굴릴 때 쓴다. */
 	.pnav-panel {
 		position: relative;
 	}
 
+	/* 넓은 화면 — 판은 상자를 버리고, 두 덩어리가 각자 화면에 붙는다. */
 	.pnav[data-mode='rail'] .pnav-panel {
+		display: contents;
+	}
+
+	.pnav[data-mode='rail'] .pnav-toc,
+	.pnav[data-mode='rail'] .pnav-rel {
+		position: fixed;
+		top: var(--pnav-top, 88px);
+		box-sizing: border-box;
+		width: var(--pnav-width, 220px);
 		max-height: calc(100vh - var(--pnav-top, 88px) - 24px);
+		margin: 0;
 		overflow-y: auto;
 		scrollbar-width: none;
+	}
+
+	.pnav[data-mode='rail'] .pnav-toc {
+		left: var(--toc-left, auto);
+	}
+
+	.pnav[data-mode='rail'] .pnav-rel {
+		left: var(--rel-left, auto);
 	}
 
 	.pnav[data-mode='rail'] .pnav-pill {
@@ -1030,54 +1034,13 @@ const dot = minimapDot(post);
 		color: var(--stage-ink);
 	}
 
+	/* 판(좁은 화면)에서는 목차 아래에 이어 앉는다. */
 	.pnav-rel {
 		margin-top: 22px;
 	}
 
-	.pnav-toggle {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		padding: 2px 0;
-		border: 0;
-		background: none;
-		font: inherit;
-		color: inherit;
-		cursor: pointer;
-	}
-
-	.pnav-count {
-		padding: 0 6px;
-		border: 1px solid #2a2a30;
-		border-radius: 9px;
-		font-size: 10.5px;
-		line-height: 16px;
-		color: var(--stage-ink-dim);
-	}
-
-	.pnav-chev {
-		width: 6px;
-		height: 6px;
-		margin-right: 3px;
-		margin-left: auto;
-		border-right: 1px solid currentColor;
-		border-bottom: 1px solid currentColor;
-		transform: translateY(-2px) rotate(45deg);
-		transition: transform 0.18s ease;
-	}
-
-	.pnav-toggle[aria-expanded='true'] .pnav-chev {
-		transform: translateY(1px) rotate(-135deg);
-	}
-
-	.pnav-toggle:hover .pnav-label,
-	.pnav-toggle:focus-visible .pnav-label {
-		color: var(--stage-ink-dim);
-	}
-
-	.pnav-rel-body {
-		margin-top: 12px;
+	.pnav-toc[hidden] + .pnav-rel {
+		margin-top: 0;
 	}
 
 	.pnav-sub {
@@ -1197,7 +1160,6 @@ const dot = minimapDot(post);
 		color: var(--stage-muted);
 	}
 
-	.pnav-toggle:focus-visible,
 	.pnav-pill:focus-visible,
 	.pnav a:focus-visible {
 		outline: 1px solid var(--post-accent);
@@ -1208,7 +1170,6 @@ const dot = minimapDot(post);
 		.bleed-svg a text,
 		.strip,
 		.pnav-list :global(a),
-		.pnav-chev,
 		.pnav-links a,
 		.pnav-all {
 			transition: none;
