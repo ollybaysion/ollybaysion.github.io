@@ -38,6 +38,8 @@ const payload = document.querySelector<HTMLScriptElement>("#list-data");
 if (svg && payload) {
   const posts: Entry[] = JSON.parse(payload.textContent ?? "[]");
   const height = Number(svg.dataset.height);
+  /** 주요 단의 편수 — 전체 목록(`/list/`)은 0이다(ListScreen). */
+  const featuredCount = Number(svg.dataset.featured ?? 2);
   const covers = svg.querySelectorAll<SVGRectElement>(".bleed-cover");
   const bands = svg.querySelectorAll<SVGLineElement>(".bleed-band");
 
@@ -165,7 +167,7 @@ if (svg && payload) {
   let rowPool: Entry[] = [];
 
   if (focus) {
-    const sections = selectSections(posts, focus);
+    const sections = selectSections(posts, focus, featuredCount);
     fillCards(sections.featured);
     rowPool = sections.rows;
     fillRows(rowPool);
@@ -173,7 +175,7 @@ if (svg && payload) {
     const subtitle = svg.querySelector<SVGTextElement>("#l-subtitle");
     if (subtitle) subtitle.textContent = `메인에서 고른 자리 기준 · ${posts.length}편`;
   } else {
-    rowPool = selectSections(posts).rows;
+    rowPool = selectSections(posts, null, featuredCount).rows;
   }
 
   const sortNewest = svg.querySelector<SVGTSpanElement>("#sort-newest");

@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import {
   circleTitle,
   listLayout,
+  selectSections,
 } from "../../src/lib/stage/list.ts";
 
 const fx = (n: number) => Number(n.toFixed(4));
@@ -91,6 +92,42 @@ describe("listLayout — 글이 적은 카테고리", () => {
     assert.deepEqual(
       layout.rows!.rows.map((row) => row.dot),
       [464, 520],
+    );
+  });
+});
+
+describe("listLayout — 전체 목록의 시리즈 단", () => {
+  it("시리즈 단은 최근 바로 다음, 전체 단은 그 마지막 구분선 아래 한 숨", () => {
+    const layout = listLayout({ latest: 1, series: 2, featured: 0, rows: 1 });
+    // 주요 단이 없을 때 전체 단이 앉던 자리(425)를 시리즈 단이 받는다.
+    assert.equal(layout.series!.label, 425);
+    assert.deepEqual(
+      layout.series!.rows.map((row) => row.dot),
+      [464, 520],
+    );
+    // 마지막 시리즈 구분선(558)에서 주요 다음과 같은 간격(52).
+    assert.equal(layout.rows!.label, 558 + 52);
+  });
+
+  it("시리즈가 없으면 단도 없다", () => {
+    const layout = listLayout({ latest: 1, series: 0, featured: 0, rows: 2 });
+    assert.equal(layout.series, undefined);
+    assert.equal(layout.rows!.label, 425);
+  });
+
+  it("주요를 0편으로 고르면 최근 다음 글이 전부 전체 단으로 간다", () => {
+    const posts = ["a", "b", "c", "d"].map((slug, i) => ({
+      slug,
+      date: `2026-09-0${4 - i}`,
+      x: 0,
+      y: 0,
+    }));
+    const sections = selectSections(posts, null, 0);
+    assert.equal(sections.latest!.slug, "a");
+    assert.deepEqual(sections.featured, []);
+    assert.deepEqual(
+      sections.rows.map((post) => post.slug),
+      ["b", "c", "d"],
     );
   });
 });

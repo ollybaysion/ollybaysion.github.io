@@ -4,12 +4,16 @@
  *
  * 카테고리 한 종의 글을 세 단으로 편다: 최근 1편 자세히 → 주요 2편 → 전체.
  * 카테고리가 없으면 모든 글을 편다(`/list/` — 시리즈에 없는 글은 여기서만 보인다).
+ * 그때는 주요 2편 대신 시리즈 단이 선다: 시리즈마다 이름과 편수 한 줄, 누르면 연재 목록.
+ * 주요는 메인에서 고른 자리로 고르는데, `/list/`는 CLI로만 와서 들고 오는 자리가 없다.
  * 주요 2편은 메인에서 클릭한 자리(`?x=&y=`) 기준 근접순이라 서버는 최신순으로 찍고
  * 클라이언트가 자리를 받아 다시 채운다. 자리·크기는 `src/lib/stage/list.ts`가 정한다.
  *
  * 자바스크립트가 죽어도 최신순 한 장은 그대로 읽힌다.
  */
 import postsData from '../data/generated/posts.json';
+import seriesData from '../data/generated/series.json';
+import { meanAngle } from '../lib/coords/arc.ts';
 import {
 	BACK_LINK,
 	BAND,
@@ -51,9 +55,33 @@ const posts = postsData.posts
 
 type Entry = (typeof posts)[number];
 
-const sections = selectSections(posts);
+/**
+ * 시리즈 단 — 전체 목록에만. 글이 있는 시리즈만 선다(파생 데이터는 글에서 나온다 —
+ * 등록부에만 있는 이름은 여기 없다). 색은 회차 각도의 원형 평균, 연재 목록과 같은 규칙.
+ */
+const dateOf = new Map(posts.map((post) => [post.slug, post.date]));
+const seriesList =
+	category === undefined
+		? Object.entries(seriesData.series)
+				.map(([name, members]) => {
+					const dates = members.map((member) => dateOf.get(member.slug) ?? '').sort();
+					return {
+						name,
+						count: members.length,
+						first: dates[0]!,
+						last: dates[dates.length - 1]!,
+						color: angleColor(meanAngle(members.map((member) => member.angle))),
+					};
+				})
+				.sort((a, b) => b.last.localeCompare(a.last) || a.name.localeCompare(b.name))
+		: [];
+
+/** 주요 단의 편수 — 전체 목록은 주요 대신 시리즈 단을 둔다. 클라이언트도 이 값을 받는다. */
+const featuredCount = category === undefined ? 0 : 2;
+const sections = selectSections(posts, null, featuredCount);
 const layout = listLayout({
 	latest: sections.latest ? 1 : 0,
+	series: seriesList.length,
 	featured: sections.featured.length,
 	rows: sections.rows.length,
 });
@@ -79,6 +107,13 @@ const featured = sections.featured.map((post, i) => ({
 	lines: wrapText(post.title, 14, FEATURED_TEXT_W, 2),
 }));
 
+const series = seriesList.map((entry, i) => ({
+	entry,
+	row: layout.series!.rows[i]!,
+	title: truncateText(entry.name, 15, ROW_TITLE_W),
+	meta: entry.first === entry.last ? `${entry.first}` : `${entry.first} – ${entry.last}`,
+}));
+
 const rows = sections.rows.map((post, i) => ({
 	post,
 	row: layout.rows!.rows[i]!,
@@ -95,6 +130,7 @@ const n = (value: number) => Number(value.toFixed(3));
 		viewBox={`0 0 ${LIST_W} ${layout.height}`}
 		data-height={layout.height}
 		data-category={category}
+		data-featured={featuredCount}
 	>
 		<defs>
 			<radialGradient id="lap-light">
@@ -283,6 +319,56 @@ const n = (value: number) => Number(value.toFixed(3));
 					</a>
 				</>
 			)
+		}
+
+		{
+			series.length > 0 && (
+				<text
+					class="section"
+					x={EDGE_L}
+					y={layout.series!.label}
+					font-size="10.5"
+					letter-spacing="3"
+					fill="#8f8c85"
+				>
+					시리즈
+				</text>
+			)
+		}
+		{
+			series.map(({ entry, row, title: seriesTitle, meta: seriesMeta }) => (
+				<g class="lseries">
+					<a href={`/series/${encodeURIComponent(entry.name)}/`}>
+						<rect class="hit" x={EDGE_L} y={row.dot - 20} width={EDGE_R - EDGE_L} height={54} />
+						<circle cx={ROW_METRICS.dotX} cy={row.dot} r="6" fill={entry.color} opacity="0.16" />
+						<circle cx={ROW_METRICS.dotX} cy={row.dot} r="3" fill={entry.color} />
+						<text x={ROW_METRICS.textX} y={row.title} font-size="15" fill="#e8e6e1">
+							{seriesTitle}
+						</text>
+						<text x={ROW_METRICS.textX} y={row.meta} font-size="11.5" fill="#8f8c85">
+							{seriesMeta}
+						</text>
+						<text
+							class="mono"
+							x={EDGE_R}
+							y={row.title}
+							text-anchor="end"
+							font-size="11"
+							fill="#8f8c85"
+						>
+							{`${entry.count}화`}
+						</text>
+					</a>
+					<line
+						x1={EDGE_L}
+						y1={row.rule}
+						x2={EDGE_R}
+						y2={row.rule}
+						stroke="#222226"
+						stroke-width="1"
+					/>
+				</g>
+			))
 		}
 
 		{
