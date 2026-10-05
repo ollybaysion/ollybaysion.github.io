@@ -4,8 +4,9 @@
  * 정본은 글 8편짜리 한 장을 손으로 박아뒀다. 여기서는 그 한 장에서 규칙만 뽑아
  * 편수가 몇이든 같은 리듬으로 흐르게 한다(정본 재현은 `test/stage/list.test.ts`).
  *
- * 세로는 흐른다: 최근 → 주요 → 전체. 각 단은 앞 단이 끝난 자리에서 정해진 간격만큼
- * 내려앉고, 단이 비면(글이 적으면) 통째로 빠지고 뒤가 당겨 올라온다.
+ * 세로는 흐른다: 최근 → 시리즈 → 주요 → 전체. 각 단은 앞 단이 끝난 자리에서 정해진
+ * 간격만큼 내려앉고, 단이 비면(글이 적으면) 통째로 빠지고 뒤가 당겨 올라온다.
+ * 시리즈 단은 전체 목록(`/list/`)에만, 주요 단은 카테고리 목록에만 선다.
  */
 
 export interface Rect {
@@ -115,8 +116,10 @@ const FEATURED = {
 /** 주요 다음 단까지의 간격(날짜 기준선에서 잰다). */
 const AFTER_FEATURED = 52;
 
-/** 전체 — 점 하나에 제목·메타 한 줄씩, 아래 구분선. */
+/** 전체 — 점 하나에 제목·메타 한 줄씩, 아래 구분선. 시리즈 단도 같은 줄을 쓴다. */
 const ROW = { labelToFirst: 39, stride: 56, dotX: 56, textX: 80, titleDy: 5, metaDy: 24, ruleDy: 38 };
+/** 시리즈 다음 단까지의 간격(마지막 구분선에서 잰다). 주요 다음 간격과 같은 숨이다. */
+const AFTER_SERIES = AFTER_FEATURED;
 
 export interface LatestBlock {
 	label: number;
@@ -152,16 +155,35 @@ export interface RowsBlock {
 
 export interface ListLayout {
 	latest?: LatestBlock;
+	series?: RowsBlock;
 	featured?: FeaturedBlock;
 	rows?: RowsBlock;
 	height: number;
 }
 
+/** `first`(첫 줄 점 자리)부터 `count`줄. */
+function rowsFrom(first: number, count: number): ListRow[] {
+	return Array.from({ length: count }, (_, i) => {
+		const dot = first + i * ROW.stride;
+		return {
+			dot,
+			title: dot + ROW.titleDy,
+			meta: dot + ROW.metaDy,
+			rule: dot + ROW.ruleDy,
+		};
+	});
+}
+
 /**
  * 편수 → 한 장의 세로 배치.
- * `featured`는 최대 2, `rows`는 나머지 전부. 0이면 그 단은 없다.
+ * `series`는 시리즈 수, `featured`는 최대 2, `rows`는 나머지 전부. 0이면 그 단은 없다.
  */
-export function listLayout(counts: { latest: number; featured: number; rows: number }): ListLayout {
+export function listLayout(counts: {
+	latest: number;
+	series?: number;
+	featured: number;
+	rows: number;
+}): ListLayout {
 	const layout: ListLayout = { height: 0 };
 	let y = FIRST_SECTION_Y;
 	let bottom = FIRST_SECTION_Y;
@@ -180,6 +202,13 @@ export function listLayout(counts: { latest: number; featured: number; rows: num
 		y = bottom + AFTER_LATEST;
 	}
 
+	if ((counts.series ?? 0) > 0) {
+		const rows = rowsFrom(y + ROW.labelToFirst, counts.series!);
+		layout.series = { label: y, rows };
+		bottom = rows[rows.length - 1]!.rule;
+		y = bottom + AFTER_SERIES;
+	}
+
 	if (counts.featured > 0) {
 		const top = y + FEATURED.labelToThumb;
 		layout.featured = {
@@ -195,16 +224,7 @@ export function listLayout(counts: { latest: number; featured: number; rows: num
 	}
 
 	if (counts.rows > 0) {
-		const first = y + ROW.labelToFirst;
-		const rows = Array.from({ length: counts.rows }, (_, i) => {
-			const dot = first + i * ROW.stride;
-			return {
-				dot,
-				title: dot + ROW.titleDy,
-				meta: dot + ROW.metaDy,
-				rule: dot + ROW.ruleDy,
-			};
-		});
+		const rows = rowsFrom(y + ROW.labelToFirst, counts.rows);
 		layout.rows = { label: y, rows };
 		bottom = rows[rows.length - 1]!.rule;
 	}
@@ -243,16 +263,19 @@ export function byNearest<T extends Selectable>(focus: { x: number; y: number })
  * 최근 1편은 언제나 최신 글이고, 주요 2편은 메인에서 고른 자리에서 가장 가까운 글이다.
  * 자리를 안 들고 왔으면(주소만 치고 들어왔으면) 주요도 최신순으로 고른다.
  * 세 단은 서로 겹치지 않는다 — 정본이 8편을 1·2·5로 나눠놓은 그대로다.
+ *
+ * `featuredCount`가 0이면 주요 단이 없다 — 전체 목록(`/list/`)은 그 자리에 시리즈 단을 둔다.
  */
 export function selectSections<T extends Selectable>(
 	posts: readonly T[],
 	focus?: { x: number; y: number } | null,
+	featuredCount: number = FEATURED.xs.length,
 ): Sections<T> {
 	const newest = [...posts].sort(byNewest);
 	const latest = newest[0];
 	const rest = newest.slice(1);
 	const ranked = focus ? [...rest].sort(byNearest(focus)) : rest;
-	const featured = ranked.slice(0, FEATURED.xs.length);
+	const featured = ranked.slice(0, featuredCount);
 	const chosen = new Set(featured.map((post) => post.slug));
 	return { latest, featured, rows: rest.filter((post) => !chosen.has(post.slug)) };
 }
