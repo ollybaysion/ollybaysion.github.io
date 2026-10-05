@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { placeAngle, tagAngle } from '../../src/lib/coords/angle.ts';
+import { placeAngle } from '../../src/lib/coords/angle.ts';
 import { angularDistance, arcSpan, toLocal } from '../../src/lib/coords/arc.ts';
 import { JITTER_DEG } from '../../src/lib/coords/constants.ts';
 import type { Arc, PlacedPost, PostInput } from '../../src/lib/coords/types.ts';
@@ -22,63 +22,37 @@ function assertInArc(arc: Arc, angle: number, label = '') {
 	assert.ok(local >= -1e-9 && local <= arcSpan(arc) + 1e-9, `${label} ${angle}° 가 호 ${arc[0]}~${arc[1]} 밖`);
 }
 
-describe('tagAngle', () => {
-	it('항상 호 안에 떨어진다', () => {
-		for (const tag of ['v60', '에스프레소', 'astro', 'mdx', '에이전트', '', '  ']) {
-			assertInArc(COFFEE, tagAngle(tag, COFFEE), tag);
-			assertInArc(DEV, tagAngle(tag, DEV), tag);
-		}
-	});
-
-	it('정규화 차이는 같은 각도로 접힌다', () => {
-		assert.equal(tagAngle(' Astro ', DEV), tagAngle('astro', DEV));
-		assert.equal(tagAngle('커피'.normalize('NFD'), COFFEE), tagAngle('커피', COFFEE));
-	});
-
-	it('결정론', () => {
-		assert.equal(tagAngle('v60', COFFEE), tagAngle('v60', COFFEE));
-	});
-});
-
-describe('placeAngle — 폴백 경로', () => {
-	it('첫 글(원장이 비었을 때)도 호 안에 앉는다', () => {
+describe('placeAngle — 닻이 없을 때', () => {
+	it('첫 글은 호 가운데(±지터)에 앉는다', () => {
 		const angle = placeAngle(post('첫-글', ['v60']), [], COFFEE);
-		assertInArc(COFFEE, angle);
+		assert.ok(angularDistance(angle, 270) <= JITTER_DEG + 1e-9);
 	});
 
-	it('태그가 0개면 슬러그 해시로 앉는다', () => {
+	it('결정론이고, 슬러그가 다르면 지터로 갈린다', () => {
 		const a = placeAngle(post('태그없는-글'), [], COFFEE);
-		const b = placeAngle(post('태그없는-글'), [], COFFEE);
-		assertInArc(COFFEE, a);
-		assert.equal(a, b);
+		assert.equal(a, placeAngle(post('태그없는-글'), [], COFFEE));
 		assert.notEqual(a, placeAngle(post('다른-글'), [], COFFEE));
 	});
-
-	it('유사 글이 0개면 닻이 있어도 태그 해시 폴백을 탄다', () => {
-		const ledger = [placed('전혀-다른-글', ['에스프레소'], 240)];
-		const alone = placeAngle(post('새-글', ['v60']), [], COFFEE);
-		assert.equal(placeAngle(post('새-글', ['v60']), ledger, COFFEE), alone);
-	});
-
-	it('폴백 각도는 태그 각도들의 평균 근처(±지터)에 앉는다', () => {
-		const tags = ['v60', '에스프레소'];
-		const mean = (toLocal(COFFEE, tagAngle(tags[0]!, COFFEE)) + toLocal(COFFEE, tagAngle(tags[1]!, COFFEE))) / 2;
-		const angle = placeAngle(post('평균-글', tags), [], COFFEE);
-		assert.ok(Math.abs(toLocal(COFFEE, angle) - mean) <= JITTER_DEG + 1e-9);
-	});
 });
 
-describe('placeAngle — 유사도 가중 평균', () => {
-	it('유사한 글이 하나면 그 옆(±지터)에 앉는다', () => {
+describe('placeAngle — 목표 간격', () => {
+	it('똑같이 닮은 글이 하나면 그 옆(±지터)에 앉는다', () => {
 		const ledger = [placed('닻', ['v60', '핸드드립'], 250)];
 		const angle = placeAngle(post('새-글', ['v60', '핸드드립']), ledger, COFFEE);
 		assert.ok(angularDistance(angle, 250) <= JITTER_DEG + 1e-9);
 	});
 
+	it('안 닮은 글에서는 멀리 떨어진다', () => {
+		const ledger = [placed('닻', ['에스프레소'], 270)];
+		const angle = placeAngle(post('새-글', ['v60']), ledger, COFFEE);
+		assert.ok(angularDistance(angle, 270) >= 50, `${angle}°`);
+		assertInArc(COFFEE, angle);
+	});
+
 	it('더 닮은 쪽으로 끌린다', () => {
 		const ledger = [
 			placed('가까운-글', ['v60', '핸드드립'], 240), // sim 2/3
-			placed('먼-글', ['에스프레소', '머신'], 320), // sim 0 → 무시
+			placed('먼-글', ['에스프레소', '머신'], 320), // sim 0
 			placed('덜-가까운-글', ['핸드드립', '로스팅'], 300), // sim 1/3
 		];
 		const angle = placeAngle(post('새-글', ['v60', '핸드드립', '로스팅']), ledger, COFFEE);
@@ -86,10 +60,22 @@ describe('placeAngle — 유사도 가중 평균', () => {
 		assertInArc(COFFEE, angle);
 	});
 
-	it('같은 시리즈면 태그가 안 겹쳐도 끌어온다', () => {
-		const ledger = [placed('1화', ['머신'], 260, '홈카페 구축기')];
-		const angle = placeAngle(post('2화', ['원두'], '홈카페 구축기'), ledger, COFFEE);
-		assert.ok(angularDistance(angle, 260) <= JITTER_DEG + 1e-9);
+	it('같은 시리즈면 태그가 안 겹쳐도 더 가깝게 앉는다', () => {
+		const series = placeAngle(post('2화', ['원두'], '홈카페 구축기'), [placed('1화', ['머신'], 240, '홈카페 구축기')], COFFEE);
+		const stranger = placeAngle(post('2화', ['원두']), [placed('1화', ['머신'], 240)], COFFEE);
+		assert.ok(angularDistance(series, 240) < angularDistance(stranger, 240));
+	});
+
+	it('주제가 셋이면 한 점으로 뭉치지 않고 호에 퍼진다', () => {
+		const topics = [['v60', '핸드드립'], ['에스프레소', '머신'], ['로스팅', '생두']];
+		const ledger: PlacedPost[] = [];
+		for (let i = 0; i < 6; i += 1) {
+			const tags = topics[i % 3]!;
+			const angle = placeAngle(post(`글-${i}`, tags), ledger, COFFEE);
+			ledger.push({ ...post(`글-${i}`, tags), angle });
+		}
+		const locals = ledger.map((entry) => toLocal(COFFEE, entry.angle));
+		assert.ok(Math.max(...locals) - Math.min(...locals) >= 60, locals.join(', '));
 	});
 
 	it('닻 순서를 바꿔도 같은 각도가 나온다', () => {

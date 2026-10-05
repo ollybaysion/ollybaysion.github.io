@@ -11,6 +11,7 @@
     "embed:check": "node scripts/embed.mjs --check",
     "coords": "node scripts/assign-coords.mjs",
     "coords:check": "node scripts/assign-coords.mjs --check",
+    "coords:remeasure": "node scripts/assign-coords.mjs --remeasure",
     "derived": "node scripts/build-derived.mjs",
     "predev": "npm run embed && npm run coords && npm run derived",
     "dev": "astro dev",

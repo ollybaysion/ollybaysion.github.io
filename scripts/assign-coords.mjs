@@ -8,6 +8,8 @@
  *
  *   node scripts/assign-coords.mjs           원장을 갱신한다
  *   node scripts/assign-coords.mjs --check   갱신이 필요하면 에러로 죽는다 (CI에서 자동)
+ *   node scripts/assign-coords.mjs --remeasure  배치 규칙(COORDS_VERSION)을 올린 뒤 한 번 —
+ *                                               살아 있는 글을 발행 순서대로 전부 다시 놓는다
  */
 import process from 'node:process';
 import { arcOf } from '../src/config/categories.ts';
@@ -15,9 +17,15 @@ import { placeAngle } from '../src/lib/coords/angle.ts';
 import { placeRadius } from '../src/lib/coords/radius.ts';
 import { confusableTags } from '../src/lib/coords/tags.ts';
 import { normalizeTags } from '../src/lib/coords/hash.ts';
+import { COORDS_VERSION } from '../src/lib/coords/constants.ts';
 import { readLedger, readPosts, readVectors, serializeJson, vectorLookup, writeLedger } from './lib/content.mjs';
 
 const checkOnly = process.argv.includes('--check') || process.env.CI === 'true';
+const remeasure = process.argv.includes('--remeasure');
+if (remeasure && checkOnly) {
+	console.error('[coords] --remeasure는 CI·--check와 같이 쓰지 않는다 — 로컬에서 의식적으로 돌릴 것.');
+	process.exit(1);
+}
 const warnings = [];
 
 function warn(message) {
@@ -25,7 +33,7 @@ function warn(message) {
 }
 
 const posts = await readPosts();
-const { ledger, raw: before } = await readLedger();
+const { ledger, raw: before } = await readLedger({ remeasure });
 // 벡터가 있으면 유사도가 코사인으로, 없으면 태그 자카드로 잰다(둘 다 같은 눈금).
 const { vectors } = await readVectors();
 const vectorOf = vectorLookup(vectors);
@@ -46,6 +54,14 @@ for (const post of posts) {
 	if (Date.parse(post.date) < Date.parse(epoch)) {
 		warn(`"${post.slug}"의 발행일이 epoch보다 이르다 — 가장 안쪽 나이테로 클램프된다 (${post.date} < ${epoch})`);
 	}
+}
+
+// 전량 재측량: 살아 있는 글의 좌표를 비워 아래 루프가 발행 순서대로 다시 놓게 한다.
+// epoch와 콘텐츠가 사라진 슬러그의 항목은 그대로 둔다.
+if (remeasure) {
+	console.log(`[coords] 전량 재측량: ${ledger.version} → ${COORDS_VERSION}`);
+	ledger.version = COORDS_VERSION;
+	for (const post of posts) delete ledger.entries[post.slug];
 }
 
 // 원장에 있지만 콘텐츠가 사라진 슬러그: 지우지 않고 경고만 한다(불변식 1).

@@ -37,10 +37,12 @@ npm run new "탬핑을 다시 배웠다" -- -c 커피 -t 에스프레소,탬핑
 | `npm run embed:check` | 임베딩이 필요하면 에러로 죽는다. CI(`CI=true`)에서는 자동으로 이 모드다 |
 | `npm run coords` | 콘텐츠를 훑어 원장(`src/data/coordinates.json`)에 없는 슬러그만 배정한다 |
 | `npm run coords:check` | 배정이 필요하면 에러로 죽는다. CI에서는 자동으로 이 모드다 |
+| `npm run coords:remeasure` | 배치 규칙(`COORDS_VERSION`)을 올린 뒤 한 번. 살아 있는 글을 발행 순서대로 전부 다시 놓는다 |
 | `npm run derived` | 원장 + 콘텐츠 → `src/data/generated/*.json` (커밋하지 않는다) |
 | `npm test` | 좌표 엔진 · 원장 · "가까우면 닮았다" 계약 테스트 |
 
 **원장 둘 다 append-only다.** 이미 박힌 좌표와 벡터는 어떤 이유로도 다시 계산하지 않는다.
+예외는 배치 규칙을 바꾼 때 하나다 — `COORDS_VERSION`을 올리고 `coords:remeasure`를 돌린다.
 새 글을 쓰면 `src/data/coordinates.json`과 `src/data/vectors.json` 변경분을 그 글 커밋에
 함께 넣는다. 글을 고쳐서 벡터를 뜬 뒤와 내용이 달라지면 경고만 뜨고 벡터는 그대로 둔다.
 
