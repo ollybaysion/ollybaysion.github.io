@@ -3,6 +3,7 @@
  * 목록 화면 — 픽셀 정본 = `~/repo/blog-screens/ListA.dc.html`.
  *
  * 카테고리 한 종의 글을 세 단으로 편다: 최근 1편 자세히 → 주요 2편 → 전체.
+ * 카테고리가 없으면 모든 글을 편다(`/list/` — 시리즈에 없는 글은 여기서만 보인다).
  * 주요 2편은 메인에서 클릭한 자리(`?x=&y=`) 기준 근접순이라 서버는 최신순으로 찍고
  * 클라이언트가 자리를 받아 다시 채운다. 자리·크기는 `src/lib/stage/list.ts`가 정한다.
  *
@@ -27,14 +28,15 @@ import { truncateText, wrapText } from '../lib/stage/text.ts';
 import { THUMB_HALO_ID, thumbMarks, thumbScene } from '../lib/stage/thumb.ts';
 
 interface Props {
-	category: string;
+	/** 없으면 모든 글. */
+	category?: string;
 }
 
 const { category } = Astro.props;
 
 /** 화면이 쓰는 글 한 편의 모습. 클라이언트도 같은 모양을 JSON으로 받는다. */
 const posts = postsData.posts
-	.filter((post) => post.category === category)
+	.filter((post) => category === undefined || post.category === category)
 	.map((post) => ({
 		slug: post.slug,
 		title: post.title,
@@ -56,8 +58,8 @@ const layout = listLayout({
 	rows: sections.rows.length,
 });
 
-const title = circleTitle(category);
-const deep = categoryDeepColor(category);
+const title = circleTitle(category ?? '전체');
+const deep = category ? categoryDeepColor(category) : '#8f8c85';
 
 /** 글자 크기별 줄바꿈 폭 — 정본이 남겨둔 자리 그대로다. */
 const LATEST_TEXT_W = EDGE_R - 356;

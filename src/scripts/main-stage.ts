@@ -4,16 +4,12 @@
  * 정본이 지어낸 앵커 목록만 카테고리 등록부로 갈아끼웠다.
  *
  * 호버 = 빛구멍과 커서를 잇는 막, 막 범위 안 글 점등.
- * 클릭 = 점 위면 그 글로, 빈 자리면 유사도 파도 목록(거리순).
+ * 클릭 = 점 위면 그 글로, 빈 자리면 가장 가까운 시리즈의 파도 목록(회차순).
  *        다른 지점 클릭 = 리로드, 내리기 = 닫기.
- * CLI = 데모. 명령 체계가 미확정이라 입력 확인 모달까지만 간다.
+ * CLI = 데모. `/write`·`/list`만 길을 내고, 나머지는 입력 확인 모달까지만 간다.
  */
 import { treePlace } from "../lib/stage/flower.ts";
-import {
-  angleColor,
-  angleColorWashed,
-  nearestCategory,
-} from "../lib/stage/palette.ts";
+import { angleColor, angleColorWashed } from "../lib/stage/palette.ts";
 import { HORIZON_Y } from "../lib/stage/sea.ts";
 import { mountFlower } from "./flower-scene.ts";
 import { mountSea } from "./sea-scene.ts";
@@ -45,7 +41,7 @@ const PANEL_TOP = 524;
 /** 파도 능선이 앉는 y. */
 const WAVE_Y = 536;
 /**
- * 파도 목록의 발치 — "목록 자세히"(762) 아래 한 뼘.
+ * 파도 목록의 발치 — "연재 목록"(762) 아래 한 뼘.
  *
  * 낮은 창에서는 이 발치가 화면 밖으로 나간다. 그럴 때 목록은 제자리를 고집하지 않고
  * 통째로 위로 올라앉는다(`panelLift`). 올라앉는 폭은 화면 높이가 정하는데,
@@ -118,9 +114,10 @@ interface Post {
   angle: number;
   slug: string;
   title: string;
-  /** YYYY-MM-DD. 은하수 목록의 오른쪽 칸에 적힌다. */
-  date: string;
   category: string;
+  /** 무대에는 시리즈 글만 선다(MainStage). */
+  series: string;
+  episode: number;
   x: number;
   y: number;
   dot: SVGCircleElement;
@@ -176,8 +173,6 @@ function pulled(
 }
 
 function start(svg: SVGSVGElement): void {
-  const dMax = Number(svg.dataset.dMax) || 390;
-
   const posts: Post[] = [...svg.querySelectorAll<SVGGElement>(".post")].map(
     (g) => {
       const angle = Number(g.dataset.a);
@@ -187,8 +182,9 @@ function start(svg: SVGSVGElement): void {
         angle,
         slug: g.dataset.slug ?? "",
         title: g.dataset.title ?? "",
-        date: g.dataset.date ?? "",
         category: g.dataset.category ?? "",
+        series: g.dataset.series ?? "",
+        episode: Number(g.dataset.episode),
         x: CX + radius * Math.cos(a),
         y: CY + radius * Math.sin(a),
         dot: g.querySelector("circle")!,
@@ -240,10 +236,6 @@ function start(svg: SVGSVGElement): void {
   const pClose = svg.querySelector<SVGTextElement>("#p-close")!;
   const pMore = svg.querySelector<SVGAElement>("#p-more")!;
   const pMoreText = pMore.querySelector<SVGTextElement>("text")!;
-  /** 목록 화면이 있는 카테고리(MainStage가 적어 둔다). */
-  const listed = new Set(
-    (svg.dataset.listed ?? "").split(",").filter((name) => name !== ""),
-  );
   const cliText = svg.querySelector<SVGTextElement>("#cli-text")!;
   const cliCaret = svg.querySelector<SVGRectElement>("#cli-caret")!;
   /** CLI의 진짜 입력칸 — 폰에서 자판을 부르는 유일한 손잡이다(MainStage.astro). */
@@ -436,25 +428,22 @@ function start(svg: SVGSVGElement): void {
     };
   }
 
-  /** 파도 목록의 머리와 행을 채운다. `note`는 행 오른쪽 끝의 작은 글자(근접도·날짜). */
+  /**
+   * 파도 목록의 머리와 행을 채운다. `note`는 행 오른쪽 끝의 작은 글자(회차·날짜).
+   *
+   * "자세히"는 시리즈 목록으로만 간다. 전체 목록(`/list/`)은 CLI로만 간다.
+   */
   function fillPanel(
     name: string,
     entries: ReadonlyArray<{ post: Post; note: string }>,
-    x: number,
-    y: number,
+    series: string | null,
   ): void {
-    const category = nearestCategory(angleAt(x, y));
-
     pName.textContent = name;
-    // 글이 없는 카테고리는 목록 화면이 없다 — 없는 길로 보내는 대신 그렇다고 적는다.
-    if (listed.has(category)) {
-      pMoreText.textContent = "목록 자세히 →";
-      pMore.setAttribute(
-        "href",
-        `/list/${encodeURIComponent(category)}/?x=${x.toFixed(1)}&y=${y.toFixed(1)}`,
-      );
+    if (series) {
+      pMoreText.textContent = "연재 목록 →";
+      pMore.setAttribute("href", `/series/${encodeURIComponent(series)}/`);
     } else {
-      pMoreText.textContent = "아직 글이 없다";
+      pMoreText.textContent = "";
       pMore.removeAttribute("href");
     }
 
@@ -480,38 +469,37 @@ function start(svg: SVGSVGElement): void {
     });
   }
 
-  /** 빈 자리를 눌렀을 때 — 그 지점에서 가까운 글 순. */
-  function openPanel(x: number, y: number): void {
-    const sorted = posts
-      .map((post) => {
-        const d = Math.hypot(x - post.x, y - post.y);
-        return { post, d, proximity: Math.max(0, 1 - d / dMax) };
-      })
-      .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug))
-      .map(({ post, proximity }) => ({
-        post,
-        note: `${Math.round(proximity * 100)}%`,
-      }));
-    fillPanel(nearestCategory(angleAt(x, y)), sorted, x, y);
+  /**
+   * 빈 자리를 눌렀을 때 — 그 지점에서 가장 가까운 회차가 든 시리즈, 회차 순.
+   * 누르는 자리가 바뀌어도 시리즈가 같으면 목록도 같다. 시리즈가 없으면 열 게 없다.
+   */
+  function openPanel(x: number, y: number): boolean {
+    const nearest = posts
+      .map((post) => ({ post, d: Math.hypot(x - post.x, y - post.y) }))
+      .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug))[0];
+    if (!nearest) return false;
+    const series = nearest.post.series;
+    const episodes = posts
+      .filter((post) => post.series === series)
+      .sort((a, b) => a.episode - b.episode)
+      .map((post) => ({ post, note: `${post.episode}화` }));
+    fillPanel(series, episodes, series);
+    return true;
   }
 
   /**
-   * 은하수를 눌렀을 때 — 그 안의 별들, 새 글부터. 전부 한자리라 근접도는 뜻이 없고,
-   * 대신 발행일을 적는다.
+   * 은하수를 눌렀을 때 — 그 안의 별들, 시리즈별 회차 순. 한 시리즈뿐이면 연재 목록으로 잇는다.
    */
-  function openGalaxy(galaxy: Galaxy, x: number, y: number): void {
+  function openGalaxy(galaxy: Galaxy): void {
+    const members = [...galaxy.members].sort(
+      (a, b) => a.series.localeCompare(b.series) || a.episode - b.episode,
+    );
+    const series = new Set(members.map((post) => post.series));
     fillPanel(
       galaxy.name,
-      galaxy.members.map((post) => ({ post, note: post.date })),
-      x,
-      y,
+      members.map((post) => ({ post, note: `${post.episode}화` })),
+      series.size === 1 ? members[0]!.series : null,
     );
-  }
-
-  function angleAt(x: number, y: number): number {
-    let angle = (Math.atan2(y - CY, x - CX) * 180) / Math.PI;
-    if (angle < 0) angle += 360;
-    return angle;
   }
 
   /**
@@ -521,6 +509,7 @@ function start(svg: SVGSVGElement): void {
   const ROUTES: Record<string, string> = {
     write: "/write/",
     post: "/write/",
+    list: "/list/",
   };
 
   function execCommand(): void {
@@ -628,7 +617,7 @@ function start(svg: SVGSVGElement): void {
     }
 
     // 점을 누르면 그 글로 바로 간다. 은하수를 누르면 그 안의 별 목록이 올라온다 —
-    // 겹친 점 중 하나로 보내면 나머지는 영영 못 가는 글이 된다. 빈 자리는 가까운 글 순.
+    // 겹친 점 중 하나로 보내면 나머지는 영영 못 가는 글이 된다. 빈 자리는 가까운 시리즈.
     const reach = e.pointerType === "touch" ? HIT_R_TOUCH : HIT_R;
     const hit = posts
       .map((post) => {
@@ -638,13 +627,13 @@ function start(svg: SVGSVGElement): void {
       .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug))[0];
     if (hit && hit.d <= reach) {
       if (hit.post.galaxy) {
-        openGalaxy(hit.post.galaxy, point.x, point.y);
+        openGalaxy(hit.post.galaxy);
       } else {
         location.href = `/blog/${hit.post.slug}/`;
         return;
       }
-    } else {
-      openPanel(point.x, point.y);
+    } else if (!openPanel(point.x, point.y)) {
+      return;
     }
 
     if (panelState.open) {

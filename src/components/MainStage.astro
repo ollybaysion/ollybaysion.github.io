@@ -24,7 +24,11 @@ import { angleColor } from '../lib/stage/palette.ts';
 import { GLADE_BAND_COUNT, GLADE_GLINTS, HORIZON_Y, SEA_DEPTH } from '../lib/stage/sea.ts';
 import { textWidth, wrapText } from '../lib/stage/text.ts';
 
-const posts = postsData.posts.map((post) => ({
+/**
+ * 무대에는 시리즈 글만 선다. 시리즈에 없는 글은 `/list/`에서만 보인다 —
+ * 무대에서 그리로 가는 길은 CLI의 `/list` 하나다.
+ */
+const posts = postsData.posts.filter((post) => post.series).map((post) => ({
 	...post,
 	color: angleColor(post.angle),
 	label: labelPlacement(post.angle, post),
@@ -295,15 +299,6 @@ const TREE_MIN_W = Math.ceil(
 	2 * (RADIUS_MAX + LABEL_GAP + TREE_W / 2 + WALL - WALL_GAP - FX),
 );
 
-/**
- * 목록 화면이 있는 카테고리.
- *
- * 등록부에는 호가 있어도 글이 한 편도 없으면 `/list/{이름}/` 길이 나지 않는다
- * (`[category].astro`가 파생 데이터에서 길을 뽑는데, 파생은 글에서 나온다).
- * 그런 카테고리 자리를 눌렀을 때 없는 길로 보내지 않으려고 무대에 적어 둔다.
- */
-const LISTED = [...new Set(postsData.posts.map((post) => post.category))];
-
 const PANEL_ROWS = [592, 624, 656, 688, 720];
 ---
 
@@ -312,8 +307,6 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		id="hoverscene"
 		viewBox="0 0 700 790"
 		aria-hidden="true"
-		data-d-max={postsData.dMax}
-		data-listed={LISTED.join(',')}
 	>
 		<defs>
 			{/*
@@ -497,7 +490,8 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 					data-slug={post.slug}
 					data-category={post.category}
 					data-title={post.title}
-					data-date={post.date.slice(0, 10)}
+					data-series={post.series}
+					data-episode={post.episode}
 				>
 					<circle cx={post.x.toFixed(1)} cy={post.y.toFixed(1)} r="1.6" fill={post.color} opacity="0" />
 					{/* 은하수에 든 별은 제 이름표가 없다 — 은하수 것 하나로 읽힌다. */}
