@@ -3,46 +3,18 @@ title: "Anti-Corruption Layer — 남의 모델을 문 앞에서 번역한다"
 date: 2026-10-05
 category: 개발
 tags: ["Spring", "DDD", "아키텍처", "Anti-Corruption-Layer"]
-series: "Java Spring"
-episode: 1
-description: "고칠 수 없는 외부 시스템과 연동하면 그 시스템의 용어와 코드값이 내 도메인으로 번진다. 상류·하류부터 시작해 ACL 이 무엇을 막고 Spring 에서 어떻게 세우는지 정리한다."
+series: "외부 시스템과 연동할 때 생기는 문제와 아키텍처 솔루션"
+episode: 6
+description: "고칠 수 없는 외부 시스템과 연동하면 그 시스템의 용어와 코드값이 내 도메인으로 번진다. Evans 의 Anti-Corruption Layer 가 무엇을 막는지, Spring 에서 어떻게 세우는지 정리한다."
 ---
 
-외부 API 하나를 붙이는 일은 보통 하루면 끝난다. 문제는 몇 달 뒤에 온다. 외부 응답의
-필드 이름과 코드값이 서비스 · 화면 · 테스트 곳곳에 박혀 있다. 상대가 필드 하나를
-바꾸면 고칠 곳이 수십 군데다.
+[1화](/blog/2026-10-05-외부-시스템과-붙을-때-무엇이-문제인가/)에서 정의한 문제 가운데
+"모델이 번진다"를 다룬다. 외부 시스템의 개념 · 이름 · 코드값이 내 코드 곳곳으로 퍼지는
+문제다.
 
-Anti-Corruption Layer(ACL)는 이 상황을 막는 패턴이다. Eric Evans 가 *Domain-Driven
-Design*(2003) 14장에서 이름을 붙였다. 이 글은 ACL 을 이해하는 데 필요한 말부터 정리한다.
-그다음 ACL 이 막는 문제를 보고, Spring 에서 세우는 방법으로 넘어간다.
-
-## 먼저 상류와 하류
-
-ACL 설명은 상류(upstream)와 하류(downstream)라는 말로 시작한다. 이 두 말은 **누구의
-변경이 누구에게 번지는지**를 나타낸다.
-
-강을 떠올리면 쉽다. 상류에서 물을 더럽히면 하류가 피해를 본다. 하류에서 무엇을 해도
-상류는 영향을 받지 않는다. 시스템도 같다.
-
-- **상류**: 모델과 인터페이스를 정해서 내주는 쪽이다. 상류가 바뀌면 하류가 따라 고친다.
-- **하류**: 그것을 가져다 쓰는 쪽이다. 하류가 바뀌어도 상류는 그대로다.
-
-판별법은 질문 하나다. "A 가 인터페이스를 바꾸면 B 가 고쳐야 하나?" 답이 "그렇다"면
-A 가 상류고 B 가 하류다.
-
-| 관계 | 인터페이스를 정하는 쪽 | 상류 | 하류 |
-| --- | --- | --- | --- |
-| 프런트엔드 ↔ 내 백엔드 | 백엔드(API 계약) | 백엔드 | 프런트엔드 |
-| 내 백엔드 ↔ 택배사 API | 택배사(응답 모양) | 택배사 | 백엔드 |
-
-헷갈리기 쉬운 점이 셋 있다.
-
-1. **호출 방향과 다르다.** 프런트엔드가 백엔드를 먼저 부르지만 프런트엔드가 하류다.
-2. **데이터 방향과 다르다.** 데이터는 양쪽으로 흐른다. 계약을 정하는 쪽은 하나다.
-3. **계층의 안팎과 다르다.** 상류 · 하류는 시스템이나 팀 사이의 관계다. 한 애플리케이션
-   안의 층 구분이 아니다.
-
-ACL 은 **하류가 만드는 장치**다. 이 글의 예에서는 택배사 API 를 쓰는 내 백엔드가 하류다.
+Anti-Corruption Layer(ACL)는 이 문제를 막는 패턴이다. Eric Evans 가 *Domain-Driven
+Design*(2003) 14장에서 이름을 붙였다. ACL 은 **하류가 만드는 장치**다. 상류와 하류의
+뜻은 1화에 정리했다. 이 글의 예에서는 택배사 API 를 쓰는 내 백엔드가 하류다.
 
 ## 문제: 남의 모델이 내 모델로 번진다
 
@@ -338,15 +310,9 @@ class BoundaryTest {
 
 ## 반대편: 내가 상류일 때
 
-ACL 은 하류의 장치다. 내 백엔드가 API 를 내주는 상류라면 쓸 패턴이 따로 있다.
-*DDD Reference* 의 Published Language 다.
-
-> If one is used as a data interchange language, it essentially becomes frozen and
-> cannot respond to new development needs.
-
-도메인 모델을 그대로 교환 언어로 쓰면 그 모델이 굳는다는 말이다. 그래서 API 응답 타입을
-도메인 타입과 따로 둔다. 하류의 ACL 과 상류의 Published Language 는 같은 생각을 양쪽에서
-적용한 것이다. 모양이 같아도 경계 양쪽의 타입을 섞지 않는다.
+ACL 은 하류의 장치다. 내 백엔드가 API 를 내주는 상류라면 문제가 반대로 생긴다. 내
+도메인 모델이 바깥에 묶여 굳는다. 이 문제와 해법(DTO · Published Language)은 7화에서
+다룬다.
 
 ## 얻는 것과 치르는 것
 
@@ -359,6 +325,6 @@ ACL 은 하류의 장치다. 내 백엔드가 API 를 내주는 상류라면 쓸
 ## 출처
 
 - Eric Evans, *Domain-Driven Design: Tackling Complexity in the Heart of Software*, 2003, 14장
-- Eric Evans, [Domain-Driven Design Reference](https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf), 2015 — Anticorruption Layer · Conformist · Published Language
+- Eric Evans, [Domain-Driven Design Reference](https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf), 2015 — Anticorruption Layer · Conformist
 - Alistair Cockburn, [Hexagonal architecture](https://alistair.cockburn.us/hexagonal-architecture/), 2005
 - [ArchUnit User Guide](https://www.archunit.org/userguide/html/000_Index.html)
