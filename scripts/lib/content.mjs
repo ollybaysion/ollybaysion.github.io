@@ -136,13 +136,14 @@ export async function readPosts() {
 	return parsed.sort((a, b) => Date.parse(a.date) - Date.parse(b.date) || a.slug.localeCompare(b.slug));
 }
 
-export async function readLedger() {
+/** @param {{ remeasure?: boolean }} [options] remeasure면 버전이 달라도 읽는다(전량 재측량하는 쪽만 쓴다). */
+export async function readLedger({ remeasure = false } = {}) {
 	const raw = await readFile(LEDGER_PATH, 'utf8');
 	const ledger = JSON.parse(raw);
-	if (ledger.version !== COORDS_VERSION) {
+	if (ledger.version !== COORDS_VERSION && !remeasure) {
 		throw new Error(
 			`원장 버전이 엔진과 다르다: 원장 ${ledger.version} vs 엔진 ${COORDS_VERSION}.\n` +
-				`  버전을 올렸다면 전량 재측량이라는 뜻이다 — 의식적으로 처리할 것.`,
+				`  버전을 올렸다면 전량 재측량이라는 뜻이다 — npm run coords:remeasure 로 의식적으로 처리할 것.`,
 		);
 	}
 	return { ledger, raw };

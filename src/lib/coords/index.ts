@@ -2,11 +2,13 @@
  * 좌표 엔진. I/O 없는 순수 함수만 모인다.
  * 파일을 읽고 쓰는 쪽(빌드 스크립트)은 `scripts/`에 산다.
  *
- * 배치 규칙은 v1(`COORDS_VERSION`), 닮은 정도를 재는 자는 v2(`EMBED_VERSION` — 임베딩 코사인)다.
+ * 배치 규칙은 v2(`COORDS_VERSION`), 닮은 정도를 재는 자는 v2(`EMBED_VERSION` — 임베딩 코사인)다.
  */
 export { angularDistance, arcAngleAt, arcSpan, clampToArc, norm360, toAbsolute, toLocal } from './arc.ts';
-export { placeAngle, tagAngle } from './angle.ts';
+export { placeAngle } from './angle.ts';
 export {
+	ANGLE_SPREAD,
+	ANGLE_STEP,
 	BAND_YEARS,
 	CENTER,
 	COORDS_VERSION,
