@@ -1,7 +1,6 @@
 ---
 /**
- * 메인 무대 — 픽셀 정본 = `~/repo/blog-screens/Main.dc.html`
- * (별자리는 `SeriesMain.dc.html`).
+ * 메인 무대 — 픽셀 정본 = `~/repo/blog-screens/Main.dc.html`.
  *
  * 정본이 손으로 박아둔 글 16편 자리에 원장의 진짜 좌표가 들어간다.
  * 점 색·이름표 자리는 정본 값을 베끼지 않고 `src/lib/stage/`에서 다시 만든다
@@ -25,50 +24,54 @@ import { GLADE_BAND_COUNT, GLADE_GLINTS, HORIZON_Y, SEA_DEPTH } from '../lib/sta
 import { textWidth, wrapText } from '../lib/stage/text.ts';
 
 /**
- * 무대에는 시리즈 글만 선다. 시리즈에 없는 글은 `/list/`에서만 보인다 —
- * 무대에서 그리로 가는 길은 CLI의 `/list` 하나다.
+ * 무대의 별 하나 = 시리즈 하나. 회차들의 한가운데에 점 하나로 선다 — 회차마다 점을 찍으면
+ * 붙은 회차의 점과 번호가 한자리에 겹친다. 회차는 점을 눌러 올라오는 파도 목록이 읽어 준다.
+ *
+ * 시리즈에 없는 글은 무대에 없다 — `/list/`에서만 보이고, 무대에서 그리로 가는 길은
+ * CLI의 `/list` 하나다. 글이 한 편도 없는 시리즈(등록부에만 있는 이름)도 무대에 없다.
  */
-const posts = postsData.posts.filter((post) => post.series).map((post) => ({
-	...post,
-	color: angleColor(post.angle),
-	label: labelPlacement(post.angle, post),
-}));
+const postBySlug = new Map(postsData.posts.map((post) => [post.slug, post]));
+const stars = Object.entries(seriesData.series).flatMap(([name, members]) => {
+	const episodes = members
+		.map((member) => ({ episode: member.episode, post: postBySlug.get(member.slug) }))
+		.filter((entry) => entry.post !== undefined)
+		.sort((a, b) => a.episode - b.episode)
+		.map((entry) => ({ slug: entry.post!.slug, title: entry.post!.title, episode: entry.episode, post: entry.post! }));
+	if (episodes.length === 0) return [];
+
+	// 원형 평균 — 회차들이 호 경계를 넘어가도 색이 반대편으로 튀지 않는다.
+	const angle = meanAngle(episodes.map((entry) => entry.post.angle));
+	const x = episodes.reduce((sum, entry) => sum + entry.post.x, 0) / episodes.length;
+	const y = episodes.reduce((sum, entry) => sum + entry.post.y, 0) / episodes.length;
+	return [
+		{
+			// 은하수 묶음(galaxy.ts)이 보는 꼴 — 시리즈 이름이 슬러그·제목 자리에 선다.
+			slug: name,
+			title: name,
+			date: episodes.map((entry) => entry.post.date).sort().at(-1)!,
+			tags: [] as string[],
+			angle,
+			x,
+			y,
+			href: `/series/${encodeURIComponent(name)}/`,
+			color: angleColor(angle),
+			label: labelPlacement(angle, { x, y }),
+			episodes: episodes.map(({ slug, title, episode }) => ({ slug, title, episode })),
+		},
+	];
+});
 
 /**
- * 은하수 — 눈이 못 가르게 붙은 글들(galaxy.ts). 별마다 이름표를 달면 겹치니 은하수에
- * 하나만 달고, 누르면 그 안의 별 목록이 올라온다. 구성원 점은 그대로 그린다 — 알갱이다.
+ * 은하수 — 눈이 못 가르게 붙은 시리즈들(galaxy.ts). 이름표를 따로 달면 겹치니 은하수에
+ * 하나만 달고, 누르면 붙은 시리즈의 회차가 전부 올라온다.
  */
-const galaxies = findGalaxies(posts).map((galaxy) => ({
+const galaxies = findGalaxies(stars).map((galaxy) => ({
 	...galaxy,
+	name: galaxy.stars.map((star) => star.title).join(' · '),
 	color: angleColor(galaxy.angle),
 	label: labelPlacement(galaxy.angle, galaxy),
 }));
 const inGalaxy = new Set(galaxies.flatMap((galaxy) => galaxy.stars.map((star) => star.slug)));
-
-const bySlug = new Map(posts.map((post) => [post.slug, post]));
-/** 시리즈 별자리 — 회차 순으로 이은 선. 멤버가 하나면 점 하나짜리 별자리다. */
-const constellations = Object.entries(seriesData.series).flatMap(([name, members]) => {
-	const nodes = members
-		.map((member) => ({ ...member, post: bySlug.get(member.slug) }))
-		.filter((node) => node.post !== undefined)
-		.map((node) => ({ episode: node.episode, x: node.post!.x, y: node.post!.y }));
-	if (nodes.length === 0) return [];
-
-	// 원형 평균 — 별자리가 호 경계를 넘어가도 색이 반대편으로 튀지 않는다.
-	const mean = meanAngle(members.map((member) => member.angle));
-	const last = nodes[nodes.length - 1]!;
-	return [
-		{
-			name,
-			href: `/series/${encodeURIComponent(name)}/`,
-			color: angleColor(mean),
-			path: nodes.map((node) => `${node.x.toFixed(1)},${node.y.toFixed(1)}`).join(' L'),
-			nodes,
-			label: { x: last.x + 14, y: last.y + 4 },
-			caption: `${nodes.length}화 연재 · 클릭 = 시리즈 목록`,
-		},
-	];
-});
 
 /** 정본 좌표계 폭. 필름 프레임선 자리가 이 단위로 적힌다. */
 const VIEW_W = 700;
@@ -110,7 +113,7 @@ const TAGLINE_GLOSS_MIN_W = needW(TAGLINE_W, 2);
 /**
  * 낱말을 풀어 쓴 글 — 손을 올렸을 때만 제사 아래에 나타난다.
  *
- * 나타나는 방식은 별자리 설명(`.series-caption`)과 같은 문법이다. 늘 떠 있으면 이름
+ * 손을 올렸을 때만 나타난다. 늘 떠 있으면 이름
  * 아래가 문단이 되어 명함이 아니라 서문이 된다.
  *
  * 110에서 접는 건 4:3 화면(정본 폭 1053)의 좌측 프레임선 안쪽 자리가 125라서다.
@@ -455,7 +458,7 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 				<g
 					class="galaxy"
 					data-name={galaxy.name}
-					data-slugs={galaxy.stars.map((star) => star.slug).join(',')}
+					data-series={JSON.stringify(galaxy.stars.map((star) => star.title))}
 				>
 					<circle
 						cx={galaxy.x.toFixed(1)}
@@ -473,37 +476,35 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 						fill="#cfccc4"
 						opacity="0">
 						{galaxy.name}
-						<tspan fill="#8f8c85" font-size="10">
-							{` · ${galaxy.stars.length}편`}
-						</tspan>
 					</text>
 				</g>
 			))
 		}
 
 		{
-			posts.map((post) => (
+			stars.map((star) => (
 				<g
-					class="post"
-					data-a={post.angle}
-					data-r={post.radius}
-					data-slug={post.slug}
-					data-category={post.category}
-					data-title={post.title}
-					data-series={post.series}
-					data-episode={post.episode}
+					class="star"
+					data-a={star.angle}
+					data-x={star.x}
+					data-y={star.y}
+					data-series={star.title}
+					data-episodes={JSON.stringify(star.episodes)}
 				>
-					<circle cx={post.x.toFixed(1)} cy={post.y.toFixed(1)} r="1.6" fill={post.color} opacity="0" />
+					<circle cx={star.x.toFixed(1)} cy={star.y.toFixed(1)} r="1.6" fill={star.color} opacity="0" />
 					{/* 은하수에 든 별은 제 이름표가 없다 — 은하수 것 하나로 읽힌다. */}
-					{!inGalaxy.has(post.slug) && (
+					{!inGalaxy.has(star.slug) && (
 						<text
-							x={post.label.x.toFixed(1)}
-							y={post.label.y.toFixed(1)}
-							text-anchor={post.label.anchor}
+							x={star.label.x.toFixed(1)}
+							y={star.label.y.toFixed(1)}
+							text-anchor={star.label.anchor}
 							font-size="11.5"
 							fill="#cfccc4"
 							opacity="0">
-							{post.title}
+							{star.title}
+							<tspan fill="#8f8c85" font-size="10">
+								{` · ${star.episodes.length}화`}
+							</tspan>
 						</text>
 					)}
 				</g>
@@ -563,60 +564,6 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 				}
 			</g>
 		</g>
-
-		{
-			constellations.map((series) => (
-				<a class="series" href={series.href} aria-label={`시리즈 ${series.name}`}>
-					<path
-						class="series-hit"
-						d={`M${series.path}`}
-						fill="none"
-						stroke="#000"
-						stroke-width="30"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						pointer-events="stroke"
-					/>
-					<path
-						class="series-line"
-						d={`M${series.path}`}
-						stroke={series.color}
-						stroke-width="1"
-						fill="none"
-					/>
-					{series.nodes.map((node) => (
-						<>
-							<circle class="series-node" cx={node.x.toFixed(1)} cy={node.y.toFixed(1)} fill={series.color} />
-							<text
-								class="series-episode"
-								x={(node.x + 8).toFixed(1)}
-								y={(node.y - 8).toFixed(1)}
-								font-size="10"
-								fill={series.color}>
-								{node.episode}
-							</text>
-						</>
-					))}
-					<text
-						class="series-name"
-						x={series.label.x.toFixed(1)}
-						y={series.label.y.toFixed(1)}
-						font-size="12"
-						font-weight="700"
-						fill={series.color}>
-						{series.name}
-					</text>
-					<text
-						class="series-caption"
-						x={series.label.x.toFixed(1)}
-						y={(series.label.y + 17).toFixed(1)}
-						font-size="10"
-						fill="#8f8c85">
-						{series.caption}
-					</text>
-				</a>
-			))
-		}
 
 		<g id="cli">
 			<line class="bleed" y1="470" y2="470" stroke="#e8e6e1" stroke-width="1.8" opacity="0.6"></line>
@@ -869,16 +816,16 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 	<nav class="stage-index" aria-label="글 목록">
 		<h2>글</h2>
 		<ul>
-			{posts.map((post) => <li><a href={`/blog/${post.slug}/`}>{post.title}</a></li>)}
+			{stars.flatMap((star) => star.episodes).map((post) => <li><a href={`/blog/${post.slug}/`}>{post.title}</a></li>)}
 		</ul>
 		{
-			constellations.length > 0 && (
+			stars.length > 0 && (
 				<>
 					<h2>시리즈</h2>
 					<ul>
-						{constellations.map((series) => (
+						{stars.map((star) => (
 							<li>
-								<a href={series.href}>{series.name}</a>
+								<a href={star.href}>{star.title}</a>
 							</li>
 						))}
 					</ul>
@@ -934,18 +881,16 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		font-family: var(--stage-sans);
 	}
 
-	#hoverscene #p-name,
-	#hoverscene .series-name {
+	#hoverscene #p-name {
 		font-family: var(--stage-title);
 	}
 
 	#hoverscene .mono,
-	#hoverscene .pd,
-	#hoverscene .series-episode {
+	#hoverscene .pd {
 		font-family: var(--stage-mono);
 	}
 
-	.post {
+	.star {
 		pointer-events: none;
 	}
 
@@ -973,7 +918,7 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		opacity: 0;
 	}
 
-	/* 풀이는 손을 올렸을 때만 — 별자리 설명과 같은 문법이다. */
+	/* 풀이는 손을 올렸을 때만. */
 	.epigraph-note,
 	.epigraph-essay {
 		opacity: 0;
@@ -1098,69 +1043,6 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 		pointer-events: all;
 	}
 
-	/* 별자리 — 평시엔 희미하게, 호버하면 점등(SeriesMain.dc.html 정본). */
-	.series {
-		cursor: pointer;
-	}
-
-	.series-hit {
-		stroke-opacity: 0;
-	}
-
-	.series-line {
-		opacity: 0.16;
-	}
-
-	.series-node {
-		r: 2;
-		opacity: 0.35;
-	}
-
-	.series-name {
-		opacity: 0.45;
-	}
-
-	.series-episode,
-	.series-caption {
-		opacity: 0;
-	}
-
-	.series-line,
-	.series-node,
-	.series-name,
-	.series-episode,
-	.series-caption {
-		transition:
-			opacity 0.18s ease,
-			r 0.18s ease;
-	}
-
-	.series:hover .series-line,
-	.series:focus-visible .series-line {
-		opacity: 0.6;
-	}
-
-	.series:hover .series-node,
-	.series:focus-visible .series-node {
-		r: 3;
-		opacity: 0.95;
-	}
-
-	.series:hover .series-name,
-	.series:focus-visible .series-name {
-		opacity: 1;
-	}
-
-	.series:hover .series-episode,
-	.series:focus-visible .series-episode {
-		opacity: 0.9;
-	}
-
-	.series:hover .series-caption,
-	.series:focus-visible .series-caption {
-		opacity: 1;
-	}
-
 	/* 모달은 document 단에서 클릭을 받는다 — 닫힌 채로 무대를 덮지 않게. */
 	#modal {
 		pointer-events: none;
@@ -1210,12 +1092,7 @@ const PANEL_ROWS = [592, 624, 656, 688, 720];
 
 	@media (prefers-reduced-motion: reduce) {
 		#alumni-col,
-		#tree-label,
-		.series-line,
-		.series-node,
-		.series-name,
-		.series-episode,
-		.series-caption {
+		#tree-label {
 			transition: none;
 		}
 	}
