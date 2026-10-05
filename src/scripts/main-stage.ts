@@ -3,8 +3,10 @@
  * `<script data-dc-script>`. 기하(메타볼 goo·파도 능선·감쇠 진동)는 그대로 옮겼고,
  * 정본이 지어낸 앵커 목록만 카테고리 등록부로 갈아끼웠다.
  *
- * 호버 = 빛구멍과 커서를 잇는 막, 막 범위 안 글 점등.
- * 클릭 = 점 위면 그 글로, 빈 자리면 가장 가까운 시리즈의 파도 목록(회차순).
+ * 무대의 점 하나 = 시리즈 하나(MainStage). 글은 점이 아니라 파도 목록의 행으로 선다.
+ *
+ * 호버 = 빛구멍과 커서를 잇는 막, 막 범위 안 점 점등.
+ * 클릭 = 가장 가까운 시리즈의 파도 목록(회차순). 점 위든 빈 자리든 같다.
  *        다른 지점 클릭 = 리로드, 내리기 = 닫기.
  * CLI = 데모. `/write`·`/list`만 길을 내고, 나머지는 입력 확인 모달까지만 간다.
  */
@@ -110,20 +112,24 @@ const TOUCH = window.matchMedia("(hover: none)").matches;
 /** 손가락 화면에서 점이 늘 지니는 밝기 — 별처럼 켜 둔 자리. */
 const DOT_REST = 0.5;
 
-interface Post {
-  angle: number;
+interface Episode {
   slug: string;
   title: string;
-  category: string;
-  /** 무대에는 시리즈 글만 선다(MainStage). */
-  series: string;
   episode: number;
+}
+
+/** 무대의 별 하나 = 시리즈 하나. 자리는 회차들의 한가운데다(MainStage). */
+interface Star {
+  angle: number;
+  series: string;
+  /** 회차 순. */
+  episodes: Episode[];
   x: number;
   y: number;
   dot: SVGCircleElement;
   /** 은하수에 든 별은 제 이름표가 없다(MainStage). */
   label: SVGTextElement | null;
-  /** 은하수 구성원이면 그 은하수. 누르면 글이 아니라 목록이 열린다. */
+  /** 은하수 구성원이면 그 은하수. 누르면 구성원 전부의 목록이 열린다. */
   galaxy: Galaxy | null;
   /** 이번 프레임의 밝기 — 은하수가 구성원 중 가장 밝은 값을 받는다. */
   glow: number;
@@ -132,7 +138,7 @@ interface Post {
 /** 은하수 — 눈이 못 가르게 붙은 별들. 안개 하나, 이름표 하나(galaxy.ts). */
 interface Galaxy {
   name: string;
-  members: Post[];
+  members: Star[];
   haze: SVGCircleElement;
   label: SVGTextElement;
 }
@@ -156,54 +162,45 @@ function clamp1(n: number): number {
  * 그리기와 클릭 판정이 같은 식을 봐야 한다 — 갈라지면 보이는 점과 눌리는 점이 어긋난다.
  */
 function pulled(
-  post: Post,
+  star: Star,
   cx: number,
   cy: number,
   op: number,
 ): { x: number; y: number; dist: number } {
-  const dx = cx - post.x;
-  const dy = cy - post.y;
+  const dx = cx - star.x;
+  const dy = cy - star.y;
   const dist = Math.max(1, Math.hypot(dx, dy));
   const pull = Math.exp(-((dist / PULL_SIGMA) ** 2)) * PULL_MAX * op;
   return {
-    x: post.x + (dx / dist) * pull,
-    y: post.y + (dy / dist) * pull,
+    x: star.x + (dx / dist) * pull,
+    y: star.y + (dy / dist) * pull,
     dist,
   };
 }
 
 function start(svg: SVGSVGElement): void {
-  const posts: Post[] = [...svg.querySelectorAll<SVGGElement>(".post")].map(
-    (g) => {
-      const angle = Number(g.dataset.a);
-      const radius = Number(g.dataset.r);
-      const a = (angle * Math.PI) / 180;
-      return {
-        angle,
-        slug: g.dataset.slug ?? "",
-        title: g.dataset.title ?? "",
-        category: g.dataset.category ?? "",
-        series: g.dataset.series ?? "",
-        episode: Number(g.dataset.episode),
-        x: CX + radius * Math.cos(a),
-        y: CY + radius * Math.sin(a),
-        dot: g.querySelector("circle")!,
-        label: g.querySelector("text"),
-        galaxy: null,
-        glow: 0,
-      };
-    },
+  const stars: Star[] = [...svg.querySelectorAll<SVGGElement>(".star")].map(
+    (g) => ({
+      angle: Number(g.dataset.a),
+      series: g.dataset.series ?? "",
+      episodes: JSON.parse(g.dataset.episodes ?? "[]") as Episode[],
+      x: Number(g.dataset.x),
+      y: Number(g.dataset.y),
+      dot: g.querySelector("circle")!,
+      label: g.querySelector("text"),
+      galaxy: null,
+      glow: 0,
+    }),
   );
-  const postBySlug = new Map(posts.map((post) => [post.slug, post]));
+  const starBySeries = new Map(stars.map((star) => [star.series, star]));
   const galaxies: Galaxy[] = [
     ...svg.querySelectorAll<SVGGElement>(".galaxy"),
   ].map((g) => {
     const galaxy: Galaxy = {
       name: g.dataset.name ?? "",
-      members: (g.dataset.slugs ?? "")
-        .split(",")
-        .map((slug) => postBySlug.get(slug))
-        .filter((post): post is Post => post !== undefined),
+      members: (JSON.parse(g.dataset.series ?? "[]") as string[])
+        .map((name) => starBySeries.get(name))
+        .filter((star): star is Star => star !== undefined),
       haze: g.querySelector("circle")!,
       label: g.querySelector("text")!,
     };
@@ -429,13 +426,13 @@ function start(svg: SVGSVGElement): void {
   }
 
   /**
-   * 파도 목록의 머리와 행을 채운다. `note`는 행 오른쪽 끝의 작은 글자(회차·날짜).
+   * 파도 목록의 머리와 행을 채운다. 행 오른쪽 끝의 작은 글자는 회차다.
    *
    * "자세히"는 시리즈 목록으로만 간다. 전체 목록(`/list/`)은 CLI로만 간다.
    */
   function fillPanel(
     name: string,
-    entries: ReadonlyArray<{ post: Post; note: string }>,
+    entries: ReadonlyArray<{ star: Star; episode: Episode }>,
     series: string | null,
   ): void {
     pName.textContent = name;
@@ -456,49 +453,48 @@ function start(svg: SVGSVGElement): void {
         row.distance.setAttribute("opacity", "0");
         return;
       }
-      row.link.setAttribute("href", `/blog/${entry.post.slug}/`);
+      row.link.setAttribute("href", `/blog/${entry.episode.slug}/`);
       row.dot.setAttribute(
         "fill",
-        entry.post.dot.getAttribute("fill") ?? "#8f8c85",
+        entry.star.dot.getAttribute("fill") ?? "#8f8c85",
       );
       row.dot.setAttribute("opacity", "1");
-      row.title.textContent = entry.post.title;
+      row.title.textContent = entry.episode.title;
       row.title.setAttribute("opacity", "1");
-      row.distance.textContent = entry.note;
+      row.distance.textContent = `${entry.episode.episode}화`;
       row.distance.setAttribute("opacity", "0.8");
     });
   }
 
   /**
-   * 빈 자리를 눌렀을 때 — 그 지점에서 가장 가까운 회차가 든 시리즈, 회차 순.
-   * 누르는 자리가 바뀌어도 시리즈가 같으면 목록도 같다. 시리즈가 없으면 열 게 없다.
+   * 누른 지점에서 가장 가까운 시리즈, 회차 순. 누르는 자리가 바뀌어도 시리즈가 같으면
+   * 목록도 같다. 시리즈가 없으면 열 게 없다.
    */
   function openPanel(x: number, y: number): boolean {
-    const nearest = posts
-      .map((post) => ({ post, d: Math.hypot(x - post.x, y - post.y) }))
-      .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug))[0];
+    const nearest = stars
+      .map((star) => ({ star, d: Math.hypot(x - star.x, y - star.y) }))
+      .sort((a, b) => a.d - b.d || a.star.series.localeCompare(b.star.series))[0];
     if (!nearest) return false;
-    const series = nearest.post.series;
-    const episodes = posts
-      .filter((post) => post.series === series)
-      .sort((a, b) => a.episode - b.episode)
-      .map((post) => ({ post, note: `${post.episode}화` }));
-    fillPanel(series, episodes, series);
+    const { star } = nearest;
+    fillPanel(
+      star.series,
+      star.episodes.map((episode) => ({ star, episode })),
+      star.series,
+    );
     return true;
   }
 
-  /**
-   * 은하수를 눌렀을 때 — 그 안의 별들, 시리즈별 회차 순. 한 시리즈뿐이면 연재 목록으로 잇는다.
-   */
+  /** 은하수를 눌렀을 때 — 붙은 시리즈들을 이름 순으로, 각자 회차 순으로 잇는다. */
   function openGalaxy(galaxy: Galaxy): void {
-    const members = [...galaxy.members].sort(
-      (a, b) => a.series.localeCompare(b.series) || a.episode - b.episode,
+    const members = [...galaxy.members].sort((a, b) =>
+      a.series.localeCompare(b.series),
     );
-    const series = new Set(members.map((post) => post.series));
     fillPanel(
       galaxy.name,
-      members.map((post) => ({ post, note: `${post.episode}화` })),
-      series.size === 1 ? members[0]!.series : null,
+      members.flatMap((star) =>
+        star.episodes.map((episode) => ({ star, episode })),
+      ),
+      null,
     );
   }
 
@@ -616,22 +612,17 @@ function start(svg: SVGSVGElement): void {
       return;
     }
 
-    // 점을 누르면 그 글로 바로 간다. 은하수를 누르면 그 안의 별 목록이 올라온다 —
-    // 겹친 점 중 하나로 보내면 나머지는 영영 못 가는 글이 된다. 빈 자리는 가까운 시리즈.
+    // 점이든 빈 자리든 가장 가까운 시리즈가 올라온다. 은하수를 누르면 붙은 시리즈 전부 —
+    // 겹친 점 중 하나만 올리면 나머지는 영영 못 여는 시리즈가 된다.
     const reach = e.pointerType === "touch" ? HIT_R_TOUCH : HIT_R;
-    const hit = posts
-      .map((post) => {
-        const at = pulled(post, press.x, press.y, press.op);
-        return { post, d: Math.hypot(point.x - at.x, point.y - at.y) };
+    const hit = stars
+      .map((star) => {
+        const at = pulled(star, press.x, press.y, press.op);
+        return { star, d: Math.hypot(point.x - at.x, point.y - at.y) };
       })
-      .sort((a, b) => a.d - b.d || a.post.slug.localeCompare(b.post.slug))[0];
-    if (hit && hit.d <= reach) {
-      if (hit.post.galaxy) {
-        openGalaxy(hit.post.galaxy);
-      } else {
-        location.href = `/blog/${hit.post.slug}/`;
-        return;
-      }
+      .sort((a, b) => a.d - b.d || a.star.series.localeCompare(b.star.series))[0];
+    if (hit && hit.d <= reach && hit.star.galaxy) {
+      openGalaxy(hit.star.galaxy);
     } else if (!openPanel(point.x, point.y)) {
       return;
     }
@@ -767,8 +758,8 @@ function start(svg: SVGSVGElement): void {
 
     // 눌리는 점이 커서 밑에 있으면 손 모양으로 알려준다 — 판정은 onDown과 같은 자리에서 잰다.
     let onPost = false;
-    for (const post of posts) {
-      const at = pulled(post, press.x, press.y, press.op);
+    for (const star of stars) {
+      const at = pulled(star, press.x, press.y, press.op);
       const dist = at.dist;
       if (target.over && Math.hypot(target.x - at.x, target.y - at.y) <= HIT_R) {
         onPost = true;
@@ -780,9 +771,9 @@ function start(svg: SVGSVGElement): void {
       );
       if (beamOn) {
         // 빔 범위 안에 든 글도 함께 점등.
-        let da = Math.abs(Math.atan2(post.y - CY, post.x - CX) - theta);
+        let da = Math.abs(Math.atan2(star.y - CY, star.x - CX) - theta);
         if (da > Math.PI) da = 2 * Math.PI - da;
-        const pr = Math.hypot(post.x - CX, post.y - CY);
+        const pr = Math.hypot(star.x - CX, star.y - CY);
         if (da < width * 1.2 && pr < distance + 45) {
           glow = Math.max(
             glow,
@@ -790,12 +781,12 @@ function start(svg: SVGSVGElement): void {
           );
         }
       }
-      post.glow = glow;
-      post.dot.setAttribute("cx", at.x.toFixed(1));
-      post.dot.setAttribute("cy", at.y.toFixed(1));
-      post.dot.setAttribute("r", (1.6 + 3.4 * glow).toFixed(2));
-      post.dot.setAttribute("opacity", Math.min(1, glow * 1.15).toFixed(2));
-      post.label?.setAttribute(
+      star.glow = glow;
+      star.dot.setAttribute("cx", at.x.toFixed(1));
+      star.dot.setAttribute("cy", at.y.toFixed(1));
+      star.dot.setAttribute("r", (1.6 + 3.4 * glow).toFixed(2));
+      star.dot.setAttribute("opacity", Math.min(1, glow * 1.15).toFixed(2));
+      star.label?.setAttribute(
         "opacity",
         TOUCH ? "0" : Math.max(0, (glow - 0.4) * 1.9).toFixed(2),
       );
